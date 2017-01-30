@@ -206,3 +206,7 @@ this software.
 ## License
 
 The Amazon ECS Container Agent is licensed under the Apache 2.0 License.
+
+## Test Amazon SNS Integration
+
+Welcome to Amazon SNS !!
