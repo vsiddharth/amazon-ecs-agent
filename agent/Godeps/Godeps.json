@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/aws/amazon-ecs-agent/agent",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v75",
+	"GodepVersion": "v79",
 	"Packages": [
 		"./..."
 	],
@@ -245,6 +245,11 @@
 			"ImportPath": "github.com/docker/go-units",
 			"Comment": "v0.3.1-6-gf2145db",
 			"Rev": "f2145db703495b2e525c59662db69a7344b00bb8"
+		},
+		{
+			"ImportPath": "github.com/fsnotify/fsnotify",
+			"Comment": "v1.4.2-4-g7d7316e",
+			"Rev": "7d7316ed6e1ed2de075aab8dfc76de5d158d66e1"
 		},
 		{
 			"ImportPath": "github.com/fsouza/go-dockerclient",
