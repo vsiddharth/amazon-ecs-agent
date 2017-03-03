@@ -27,6 +27,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
 	"github.com/aws/amazon-ecs-agent/agent/ec2"
 	"github.com/aws/amazon-ecs-agent/agent/engine"
+	eniManager "github.com/aws/amazon-ecs-agent/agent/eni"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerclient"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
 	"github.com/aws/amazon-ecs-agent/agent/eventhandler"
@@ -122,6 +123,9 @@ func _main() int {
 		version.PrintVersion(versionableEngine)
 		return exitcodes.ExitSuccess
 	}
+
+	log.Info("Initialize ENI Manager")
+	eniManager := eniManager.NewENIManager()
 
 	sighandlers.StartDebugHandler()
 
@@ -241,6 +245,12 @@ func _main() int {
 		}
 	}
 
+	err = eniManager.InitENIStateManager()
+	log.Errorf("Error initializing ENI State Manager")
+
+	log.Info("Begin ENI Update")
+	go eniManager.BeginENIUpdate(ctx)
+
 	// Begin listening to the docker daemon and saving changes
 	taskEngine.SetSaver(stateManager)
 	imageManager.SetSaver(stateManager)
@@ -250,6 +260,7 @@ func _main() int {
 	if !cfg.ImageCleanupDisabled {
 		go imageManager.StartImageCleanupProcess(ctx)
 	}
+
 
 	go sighandlers.StartTerminationHandler(stateManager, taskEngine)
 
