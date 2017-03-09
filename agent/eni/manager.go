@@ -14,51 +14,69 @@
 package eni
 
 import (
+	"context"
 	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
-	"os"
-	"strings"
-	"context"
-
-	"path/filepath"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/pkg/errors"
 	"github.com/vishvananda/netlink"
 
+	"github.com/aws/amazon-ecs-agent/agent/eni/netlinkWrapper"
 	log "github.com/cihub/seelog"
 )
 
 const (
-	sysfsNetDir			= "/sys/class/net"
-	eth				= "eth"
-	defaultReconciliationInterval	= time.Second * 10
+	ethPrefix                     = "eth"
+	defaultReconciliationInterval = time.Second * 30
+	invalidDeviceMsg              = "Invalid Device Name"
+	invalidMACMsg                 = "Invalid MAC Address"
 )
 
-type ENIManager interface {
-	//TODO: Add Helper for payload handler
-	InitENIStateManager() error
-	BeginENIUpdate (ctx context.Context)
+// NOTE: This eases testing with mock
+var sysfsNetDir = "/sys/class/net"
+
+//type enis map[string]string
+
+// Manager exposes the methods to initialize and update ENI's
+// attached to the instance.
+type Manager interface {
+	InitStateManager() error
+	BeginENIUpdate(ctx context.Context)
+	GetAllENIs() map[string]string
 }
 
-
-type ENIStateManager struct {
-	updateLock			sync.RWMutex
-	updateIntervalTicker		*time.Ticker
-	enis				map[string]string // MAC => Device-Name
-	watcher				*fsnotify.Watcher
+// StateManager maintains the state of ENI's connected
+// to the instance. It also has supporting elements to
+// maintain consistency and update intervals
+type StateManager struct {
+	updateLock           sync.RWMutex
+	updateIntervalTicker *time.Ticker
+	enis                 map[string]string // MAC => Device-Name
+	watcher              *fsnotify.Watcher
+	netlinkClient        netlinkWrapper.NetLink
 }
 
+// NewENIManager instanciates a new ENIStateManager
+func NewENIManager() Manager {
+	return newStateManager()
+}
 
-func NewENIManager() ENIManager {
-	return &ENIStateManager{
-		enis: make(map[string]string, 10),
+func newStateManager() *StateManager {
+	return &StateManager{
+		enis:          make(map[string]string, 10),
+		netlinkClient: netlinkWrapper.NetLinkClient{},
 	}
 }
 
-
-func (eniStateManager *ENIStateManager) InitENIStateManager() error {
-	links, err := netlink.LinkList()
+// InitStateManager initializes a new ENI State Manager
+func (eniStateManager *StateManager) InitStateManager() error {
+	links, err := eniStateManager.netlinkClient.LinkList()
 	if err != nil {
 		log.Errorf("Error retrieving network interfaces: %s", err.Error())
 		return err
@@ -66,8 +84,12 @@ func (eniStateManager *ENIStateManager) InitENIStateManager() error {
 
 	for _, link := range links {
 		deviceName, MACAddress := link.Attrs().Name, link.Attrs().HardwareAddr.String()
-		if strings.HasPrefix(deviceName, eth) {
-			eniStateManager.addDeviceWithMACAddress(deviceName, MACAddress)
+		if strings.HasPrefix(deviceName, ethPrefix) {
+			// FIXME: Check if lock necessary ?
+			err = eniStateManager.addDeviceWithMACAddress(deviceName, MACAddress)
+			if err != nil {
+				log.Errorf(err.Error())
+			}
 		}
 	}
 
@@ -85,32 +107,17 @@ func (eniStateManager *ENIStateManager) InitENIStateManager() error {
 	}
 
 	// FSNotify Update Handler
-	go func () {
-		for {
-			select {
-			case evt := <-eniStateManager.watcher.Events:
-				if evt.Op&fsnotify.Create == fsnotify.Create {
-					eniStateManager.addDevice(evt.Name)
-				}
-				if evt.Op&fsnotify.Remove == fsnotify.Remove {
-					eniStateManager.removeDevice(evt.Name)
-				}
-			case erx := <-eniStateManager.watcher.Errors:
-				log.Debugf("FSNotify Error: %s", erx.Error())
-			}
-		}
-	}()
+	go eniStateManager.fsnotifyHandler()
 
 	return nil
 }
 
-
-func (eniStateManager *ENIStateManager) BeginENIUpdate (ctx context.Context) {
+// BeginENIUpdate periodically updates the state of ENI's connected to the system
+func (eniStateManager *StateManager) BeginENIUpdate(ctx context.Context) {
 	eniStateManager.performPeriodicReconciliation(ctx, defaultReconciliationInterval)
 }
 
-
-func (eniStateManager *ENIStateManager) performPeriodicReconciliation (ctx context.Context, updateInterval time.Duration) {
+func (eniStateManager *StateManager) performPeriodicReconciliation(ctx context.Context, updateInterval time.Duration) {
 	eniStateManager.updateIntervalTicker = time.NewTicker(updateInterval)
 	for {
 		select {
@@ -123,115 +130,179 @@ func (eniStateManager *ENIStateManager) performPeriodicReconciliation (ctx conte
 	}
 }
 
-
-func (eniStateManager *ENIStateManager) reconcileENIs () {
-	links, err := netlink.LinkList()
+func (eniStateManager *StateManager) reconcileENIs() {
+	links, err := eniStateManager.netlinkClient.LinkList()
 	if err != nil {
-		log.Error("Error obtaining netlink linklist: %s", err.Error())
+		log.Errorf("Error obtaining netlink linklist: %s", err.Error())
 	}
 
 	currentState := eniStateManager.buildState(links)
 
 	// Remove non-existent interfaces first
-	for mac, _ := range eniStateManager.enis {
+	eniStateManager.updateLock.Lock()
+	for mac := range eniStateManager.enis {
 		if _, ok := currentState[mac]; !ok {
-			eniStateManager.removeDeviceWithMACAddress(mac)
+			err = eniStateManager.removeDeviceWithMACAddress(mac)
+			if err != nil {
+				log.Errorf(err.Error())
+			}
 		}
 	}
+	eniStateManager.updateLock.Unlock()
 
 	// Add new interfaces next
 	for mac, dev := range currentState {
 		if !eniStateManager.deviceExists(mac) {
-			eniStateManager.addDeviceWithMACAddress(mac, dev)
+			eniStateManager.updateLock.Lock()
+			err = eniStateManager.addDeviceWithMACAddress(dev, mac)
+			if err != nil {
+				log.Errorf(err.Error())
+			}
+			eniStateManager.updateLock.Unlock()
 		}
 	}
 }
 
+func (eniStateManager *StateManager) GetAllENIs() map[string]string {
+	return eniStateManager.enis
+}
 
 // Helper Methods
 
+// addDeviceWithMACAddress requires lock to be held prior to update
+func (eniStateManager *StateManager) addDeviceWithMACAddress(deviceName, MACAddress string) error {
+	log.Debugf("Adding device %s with MAC %s", deviceName, MACAddress)
 
-func (eniStateManager *ENIStateManager) addDeviceWithMACAddress (deviceName, MACAddress string) {
-	eniStateManager.updateLock.Lock()
-	defer eniStateManager.updateLock.Unlock()
-
-	eniStateManager.enis[MACAddress] = deviceName
-}
-
-
-func (eniStateManager *ENIStateManager) addDevice (deviceName string) {
-	device := filepath.Base(deviceName)
-	MACAddress, err := eniStateManager.getMACAddress(device)
-	if err != nil {
-		log.Errorf("Error obtaining MAC Address: %s", err.Error())
-		return
+	// Validate parameters for correctness
+	if !eniStateManager.isValidDevice(deviceName, ethPrefix) {
+		return errors.New(invalidDeviceMsg)
 	}
 
-	eniStateManager.addDeviceWithMACAddress(device, MACAddress)
+	if !eniStateManager.isValidMACAddress(MACAddress) {
+		return errors.New(invalidMACMsg)
+	}
+
+	eniStateManager.enis[MACAddress] = deviceName
+	return nil
 }
 
+func (eniStateManager *StateManager) addDevice(deviceName string) error {
+	device := filepath.Base(deviceName)
 
-func (eniStateManager *ENIStateManager) removeDeviceWithMACAddress (mac string) {
-	eniStateManager.updateLock.Lock()
-	defer eniStateManager.updateLock.Unlock()
+	if !eniStateManager.isValidDevice(deviceName, ethPrefix) {
+		return errors.New(invalidDeviceMsg)
+	}
 
+	MACAddress, err := eniStateManager.getMACAddress(device)
+
+	if err != nil {
+		log.Errorf("Error obtaining MAC Address: %s", err.Error())
+		return err
+	}
+
+	return eniStateManager.addDeviceWithMACAddress(device, MACAddress)
+}
+
+func (eniStateManager *StateManager) removeDeviceWithMACAddress(mac string) error {
 	log.Debugf("Removing device with MACAddress: %s", mac)
+
+	if !eniStateManager.isValidMACAddress(mac) {
+		return errors.New(invalidMACMsg)
+	}
+
 	delete(eniStateManager.enis, mac)
+	return nil
 }
 
+func (eniStateManager *StateManager) removeDevice(deviceName string) error {
+	log.Debugf("Removing device: %s", deviceName)
 
-func (eniStateManager *ENIStateManager) removeDevice (deviceName string) {
+	if !eniStateManager.isValidDevice(deviceName, ethPrefix) {
+		return errors.New(invalidDeviceMsg)
+	}
+
 	for mac, dev := range eniStateManager.enis {
 		if dev == deviceName {
 			eniStateManager.removeDeviceWithMACAddress(mac)
 		}
 	}
+	return nil
 }
 
-
-func (eniStateManager *ENIStateManager) deviceExists(device string) bool {
+func (eniStateManager *StateManager) deviceExists(mac string) bool {
 	eniStateManager.updateLock.RLock()
 	defer eniStateManager.updateLock.RUnlock()
 
-	if _, ok := eniStateManager.enis[device]; ok {
+	if _, ok := eniStateManager.enis[mac]; ok {
 		return true
 	}
 	return false
 }
 
-
-func (eniStateManager *ENIStateManager) getMACAddress (dev string) (string, error) {
+func (eniStateManager *StateManager) getMACAddress(dev string) (string, error) {
 	var mac string
 
 	dev = filepath.Base(dev)
-	link, err := netlink.LinkByName(dev)
+	link, err := eniStateManager.netlinkClient.LinkByName(dev)
 
 	if err == nil {
 		mac = link.Attrs().HardwareAddr.String()
-	} else {
-		log.Errorf("Error fetching MAC Address: %s", err.Error())
 	}
 	return mac, err
 }
 
+func (eniStateManager *StateManager) isValidDevice(deviceName, prefix string) bool {
+	if strings.HasPrefix(deviceName, prefix) {
+		return true
+	}
+	return false
+}
+
+func (eniStateManager *StateManager) isValidMACAddress(mac string) bool {
+	_, err := net.ParseMAC(mac)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
 // Helper to build state for Reconciliation
-func (eniStateManager *ENIStateManager) buildState(links []netlink.Link) map[string]string {
+func (eniStateManager *StateManager) buildState(links []netlink.Link) map[string]string {
 	state := make(map[string]string, 10)
 
 	for _, link := range links {
 		deviceName, MACAddress := link.Attrs().Name, link.Attrs().HardwareAddr.String()
-		if strings.HasPrefix(deviceName, eth) {
+		if strings.HasPrefix(deviceName, ethPrefix) {
 			state[MACAddress] = deviceName
 		}
 	}
 	return state
 }
 
-// Debug Purposes: Will be culled
-func (eniStateManager *ENIStateManager) dumpToFile(fileName string) {
-	log.Info("Dump State to FILE")
-	f, err := os.Create(fileName)
-	log.Errorf("Error: %s", err.Error())
+func (eniStateManager *StateManager) fsnotifyHandler() {
+	for {
+		select {
+		case evt := <-eniStateManager.watcher.Events:
+			if evt.Op&fsnotify.Create == fsnotify.Create {
+				eniStateManager.updateLock.Lock()
+				eniStateManager.addDevice(evt.Name)
+				eniStateManager.updateLock.Unlock()
+			}
+			if evt.Op&fsnotify.Remove == fsnotify.Remove {
+				eniStateManager.updateLock.Lock()
+				eniStateManager.removeDevice(evt.Name)
+				eniStateManager.updateLock.Unlock()
+			}
+		case erx := <-eniStateManager.watcher.Errors:
+			log.Debugf("FSNotify Error: %s", erx.Error())
+		}
+	}
+}
+
+// Debug Purposes: Will be culled in the future
+func (eniStateManager *StateManager) dumpToFile(fileName string) {
+	log.Info("Dump State to FILE: %s", fileName)
+	f, _ := os.Create(fileName)
 	defer f.Close()
 
 	for mac, dev := range eniStateManager.enis {

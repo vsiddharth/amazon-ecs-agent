@@ -27,9 +27,9 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
 	"github.com/aws/amazon-ecs-agent/agent/ec2"
 	"github.com/aws/amazon-ecs-agent/agent/engine"
-	eniManager "github.com/aws/amazon-ecs-agent/agent/eni"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerclient"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
+	eniManager "github.com/aws/amazon-ecs-agent/agent/eni"
 	"github.com/aws/amazon-ecs-agent/agent/eventhandler"
 	"github.com/aws/amazon-ecs-agent/agent/eventstream"
 	"github.com/aws/amazon-ecs-agent/agent/handlers"
@@ -245,8 +245,10 @@ func _main() int {
 		}
 	}
 
-	err = eniManager.InitENIStateManager()
-	log.Errorf("Error initializing ENI State Manager")
+	err = eniManager.InitStateManager()
+	if err != nil {
+		log.Errorf("Error initializing ENI State Manager")
+	}
 
 	log.Info("Begin ENI Update")
 	go eniManager.BeginENIUpdate(ctx)
@@ -260,7 +262,6 @@ func _main() int {
 	if !cfg.ImageCleanupDisabled {
 		go imageManager.StartImageCleanupProcess(ctx)
 	}
-
 
 	go sighandlers.StartTerminationHandler(stateManager, taskEngine)
 
