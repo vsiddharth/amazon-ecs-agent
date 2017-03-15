@@ -31,57 +31,77 @@ const (
 	invalidDevice = "veth1"
 )
 
+// TestEmptyStateManager checks initialization of a new State Manager
 func TestEmptyStateManager(t *testing.T) {
 	stateManager := newStateManager()
 	assert.Empty(t, stateManager.enis)
 }
 
+// TestEmptyENIManager checks instantiation of empty ENIManager
 func TestEmptyENIManager(t *testing.T) {
 	eniManager := NewENIManager()
 	enis := eniManager.GetAllENIs()
 	assert.Empty(t, enis)
 }
 
+// TestAddDeviceWithMACAddress checks adding devices to the ENI State Manager
 func TestAddDeviceWithMACAddress(t *testing.T) {
 	stateManager := newStateManager()
+
+	// Add valid (device, MAC)
 	err := stateManager.addDeviceWithMACAddress(randomDevice, randomMAC)
 	assert.Nil(t, err)
 	enis := stateManager.GetAllENIs()
 	assert.NotEmpty(t, enis)
 
+	// Add device with invalid MAC
 	err = stateManager.addDeviceWithMACAddress(randomDevice, invalidMAC)
 	assert.EqualError(t, err, invalidMACMsg)
 
+	// Add invalid device with valid MAC
 	err = stateManager.addDeviceWithMACAddress(invalidDevice, randomMAC)
 	assert.EqualError(t, err, invalidDeviceMsg)
 }
 
+// TestRemoveDeviceWithMACAddress checks removing devices from the ENI State Manager
 func TestRemoveDeviceWithMACAddress(t *testing.T) {
 	stateManager := newStateManager()
+
+	// Add valid (device, MAC)
 	err := stateManager.addDeviceWithMACAddress(randomDevice, randomMAC)
 	assert.Nil(t, err)
 	enis := stateManager.GetAllENIs()
 	assert.NotEmpty(t, enis)
+
+	// Remove device from State Manager
 	err = stateManager.removeDeviceWithMACAddress(randomMAC)
 	assert.Nil(t, err)
 	enis = stateManager.GetAllENIs()
 	assert.Empty(t, enis)
 }
 
+// TestRemoveDevice checks removing devices from ENI State Manager
 func TestRemoveDevice(t *testing.T) {
 	stateManager := newStateManager()
+
+	// Add valid (device, MAC)
 	err := stateManager.addDeviceWithMACAddress(randomDevice, randomMAC)
 	assert.Nil(t, err)
 	enis := stateManager.GetAllENIs()
 	assert.NotEmpty(t, enis)
+
+	// Remove device from State Manager
 	err = stateManager.removeDevice(randomDevice)
 	assert.Nil(t, err)
 	enis = stateManager.GetAllENIs()
 	assert.Empty(t, enis)
 }
 
+// TestDeviceExists checks the existence of devices in State Manager
 func TestDeviceExists(t *testing.T) {
 	stateManager := newStateManager()
+
+	// Add valid (device, MAC)
 	err := stateManager.addDeviceWithMACAddress(randomDevice, randomMAC)
 	assert.Nil(t, err)
 	exists := stateManager.deviceExists(randomMAC)
@@ -91,6 +111,7 @@ func TestDeviceExists(t *testing.T) {
 	assert.False(t, exists)
 }
 
+// TestENIInitStateManager checks the sanity of InitStateManager
 func TestENIInitStateManager(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -105,7 +126,8 @@ func TestENIInitStateManager(t *testing.T) {
 			},
 		},
 	}, nil)
-	// NOTE: Set sysfsNetDir for testing purpose
+
+	// NOTE: Set sysfsNetDir for testing purposes only
 	sysfsNetDir = "."
 	eniManager := newStateManager()
 	eniManager.netlinkClient = mockNetlink
@@ -117,6 +139,7 @@ func TestENIInitStateManager(t *testing.T) {
 	assert.NotEmpty(t, enis)
 }
 
+// TestENIGetMACAddress checks getMACAddress
 func TestENIGetMACAddress(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -137,6 +160,7 @@ func TestENIGetMACAddress(t *testing.T) {
 	assert.Equal(t, randomMAC, MACAddress)
 }
 
+// TestAddDevice checks adding devices to the ENI State Manager
 func TestAddDevice(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -154,16 +178,18 @@ func TestAddDevice(t *testing.T) {
 	eniManager := newStateManager()
 	eniManager.netlinkClient = mockNetlink
 
+	// Add valid device to State Manager
 	err := eniManager.addDevice(randomDevice)
 	assert.Nil(t, err)
 	enis := eniManager.GetAllENIs()
 	assert.NotEmpty(t, enis)
 
+	// Attempt to add an invalid device
 	err = eniManager.addDevice(invalidDevice)
 	assert.EqualError(t, err, invalidDeviceMsg)
-
 }
 
+// TestMACAddressValidator verifies MAC address added to State Manager
 func TestMACAddressValidator(t *testing.T) {
 	eniManager := newStateManager()
 
@@ -174,6 +200,7 @@ func TestMACAddressValidator(t *testing.T) {
 	assert.True(t, macStatus)
 }
 
+// TestDeviceValidator verifies valid device names
 func TestDeviceValidator(t *testing.T) {
 	eniManager := newStateManager()
 

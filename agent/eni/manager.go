@@ -15,9 +15,7 @@ package eni
 
 import (
 	"context"
-	"fmt"
 	"net"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -38,10 +36,7 @@ const (
 	invalidMACMsg                 = "Invalid MAC Address"
 )
 
-// NOTE: This eases testing with mock
 var sysfsNetDir = "/sys/class/net"
-
-//type enis map[string]string
 
 // Manager exposes the methods to initialize and update ENI's
 // attached to the instance.
@@ -78,31 +73,32 @@ func newStateManager() *StateManager {
 func (eniStateManager *StateManager) InitStateManager() error {
 	links, err := eniStateManager.netlinkClient.LinkList()
 	if err != nil {
-		log.Errorf("Error retrieving network interfaces: %s", err.Error())
+		log.Errorf("Error retrieving network interfaces: %v", err)
 		return err
 	}
 
+	eniStateManager.updateLock.Lock()
 	for _, link := range links {
 		deviceName, MACAddress := link.Attrs().Name, link.Attrs().HardwareAddr.String()
 		if strings.HasPrefix(deviceName, ethPrefix) {
-			// FIXME: Check if lock necessary ?
 			err = eniStateManager.addDeviceWithMACAddress(deviceName, MACAddress)
 			if err != nil {
 				log.Errorf(err.Error())
 			}
 		}
 	}
+	eniStateManager.updateLock.Unlock()
 
 	// Setup FSNotify Watcher
 	eniStateManager.watcher, err = fsnotify.NewWatcher()
 	if err != nil {
-		log.Errorf("Error creating watcher: %s", err.Error())
+		log.Errorf("Error creating watcher: %v", err)
 		return err
 	}
 	// Add Watch Directory
 	err = eniStateManager.watcher.Add(sysfsNetDir)
 	if err != nil {
-		log.Errorf("Error adding watcher: %s", err.Error())
+		log.Errorf("Error adding watcher: %v", err)
 		return err
 	}
 
@@ -133,7 +129,7 @@ func (eniStateManager *StateManager) performPeriodicReconciliation(ctx context.C
 func (eniStateManager *StateManager) reconcileENIs() {
 	links, err := eniStateManager.netlinkClient.LinkList()
 	if err != nil {
-		log.Errorf("Error obtaining netlink linklist: %s", err.Error())
+		log.Errorf("Error obtaining netlink linklist: %v", err)
 	}
 
 	currentState := eniStateManager.buildState(links)
@@ -169,7 +165,7 @@ func (eniStateManager *StateManager) GetAllENIs() map[string]string {
 
 // Helper Methods
 
-// addDeviceWithMACAddress requires lock to be held prior to update
+//NOTE: addDeviceWithMACAddress expects lock to be held prior to update
 func (eniStateManager *StateManager) addDeviceWithMACAddress(deviceName, MACAddress string) error {
 	log.Debugf("Adding device %s with MAC %s", deviceName, MACAddress)
 
@@ -196,13 +192,14 @@ func (eniStateManager *StateManager) addDevice(deviceName string) error {
 	MACAddress, err := eniStateManager.getMACAddress(device)
 
 	if err != nil {
-		log.Errorf("Error obtaining MAC Address: %s", err.Error())
+		log.Errorf("Error obtaining MAC Address: %v", err)
 		return err
 	}
 
 	return eniStateManager.addDeviceWithMACAddress(device, MACAddress)
 }
 
+//NOTE: removeDeviceWithMACAddress expects lock to be held prior to update
 func (eniStateManager *StateManager) removeDeviceWithMACAddress(mac string) error {
 	log.Debugf("Removing device with MACAddress: %s", mac)
 
@@ -296,18 +293,5 @@ func (eniStateManager *StateManager) fsnotifyHandler() {
 		case erx := <-eniStateManager.watcher.Errors:
 			log.Debugf("FSNotify Error: %s", erx.Error())
 		}
-	}
-}
-
-// Debug Purposes: Will be culled in the future
-func (eniStateManager *StateManager) dumpToFile(fileName string) {
-	log.Info("Dump State to FILE: %s", fileName)
-	f, _ := os.Create(fileName)
-	defer f.Close()
-
-	for mac, dev := range eniStateManager.enis {
-		s := fmt.Sprintf("%s - %s\n", mac, dev)
-		f.WriteString(s)
-		f.Sync()
 	}
 }

@@ -124,9 +124,6 @@ func _main() int {
 		return exitcodes.ExitSuccess
 	}
 
-	log.Info("Initialize ENI Manager")
-	eniManager := eniManager.NewENIManager()
-
 	sighandlers.StartDebugHandler()
 
 	if cfgErr != nil {
@@ -244,6 +241,9 @@ func _main() int {
 			return exitcodes.ExitError
 		}
 	}
+
+	log.Info("Initialize ENI Manager")
+	eniManager := eniManager.NewENIManager()
 
 	err = eniManager.InitStateManager()
 	if err != nil {
