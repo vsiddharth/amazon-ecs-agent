@@ -14,7 +14,10 @@
 package eni
 
 import (
+	"math/rand"
 	"net"
+	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/aws/amazon-ecs-agent/agent/eni/netlinkWrapper/mocks"
@@ -209,4 +212,81 @@ func TestDeviceValidator(t *testing.T) {
 
 	devStatus = eniManager.isValidDevice(invalidDevice, ethPrefix)
 	assert.False(t, devStatus)
+}
+
+// Generate Random MAC Address
+func genRandomMACAddress() string {
+	validAlphabet := "0123456789ABCDEF"
+	lmac := 12
+	b := make([]byte, lmac)
+
+	for i := range b {
+		b[i] = validAlphabet[rand.Intn(len(validAlphabet))]
+	}
+
+	mac := string(b)
+	for i := 2; i < len(mac); i += 3 {
+		mac = mac[:i] + ":" + mac[i:]
+	}
+	return mac
+
+}
+
+// TestConcurrentAddDevice checks concurrent state updates
+func TestConcurrentAddDevice(t *testing.T) {
+	var waitGroup sync.WaitGroup
+	numRountines := 8000
+
+	eniManager := newStateManager()
+
+	waitGroup.Add(numRountines)
+
+	for i := 0; i < numRountines; i++ {
+		dev := ethPrefix + strconv.Itoa(i)
+		mac := genRandomMACAddress()
+		go func() {
+			eniManager.updateLock.Lock()
+			eniManager.addDeviceWithMACAddress(dev, mac)
+			eniManager.updateLock.Unlock()
+			waitGroup.Done()
+		}()
+	}
+
+	waitGroup.Wait()
+
+	enis := eniManager.GetAllENIs()
+	assert.Equal(t, len(enis), numRountines)
+}
+
+// TestConcurrentRemoveDevice checks concurrent state updates
+func TestConcurrentRemoveDevice(t *testing.T) {
+	var waitGroup sync.WaitGroup
+	numRountines := 80
+
+	eniManager := newStateManager()
+
+	for i := 0; i < numRountines; i++ {
+		dev := ethPrefix + strconv.Itoa(i)
+		mac := genRandomMACAddress()
+		eniManager.updateLock.Lock()
+		eniManager.addDeviceWithMACAddress(dev, mac)
+		eniManager.updateLock.Unlock()
+	}
+
+	waitGroup.Add(numRountines)
+
+	for i := 0; i < numRountines; i++ {
+		dev := ethPrefix + strconv.Itoa(i)
+		go func() {
+			eniManager.updateLock.Lock()
+			eniManager.removeDevice(dev)
+			eniManager.updateLock.Unlock()
+			waitGroup.Done()
+		}()
+	}
+
+	waitGroup.Wait()
+
+	enis := eniManager.GetAllENIs()
+	assert.Equal(t, len(enis), 0)
 }
