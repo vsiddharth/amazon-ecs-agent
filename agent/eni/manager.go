@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/pkg/errors"
 	"github.com/vishvananda/netlink"
 
@@ -53,7 +52,6 @@ type StateManager struct {
 	updateLock           sync.RWMutex
 	updateIntervalTicker *time.Ticker
 	enis                 map[string]string // MAC => Device-Name
-	watcher              *fsnotify.Watcher
 	netlinkClient        netlinkWrapper.NetLink
 }
 
@@ -89,21 +87,7 @@ func (eniStateManager *StateManager) InitStateManager() error {
 	}
 	eniStateManager.updateLock.Unlock()
 
-	// Setup FSNotify Watcher
-	eniStateManager.watcher, err = fsnotify.NewWatcher()
-	if err != nil {
-		log.Errorf("Error creating watcher: %v", err)
-		return err
-	}
-	// Add Watch Directory
-	err = eniStateManager.watcher.Add(sysfsNetDir)
-	if err != nil {
-		log.Errorf("Error adding watcher: %v", err)
-		return err
-	}
-
-	// FSNotify Update Handler
-	go eniStateManager.fsnotifyHandler()
+	// TODO: Event Update Handler
 
 	return nil
 }
@@ -274,24 +258,4 @@ func (eniStateManager *StateManager) buildState(links []netlink.Link) map[string
 		}
 	}
 	return state
-}
-
-func (eniStateManager *StateManager) fsnotifyHandler() {
-	for {
-		select {
-		case evt := <-eniStateManager.watcher.Events:
-			if evt.Op&fsnotify.Create == fsnotify.Create {
-				eniStateManager.updateLock.Lock()
-				eniStateManager.addDevice(evt.Name)
-				eniStateManager.updateLock.Unlock()
-			}
-			if evt.Op&fsnotify.Remove == fsnotify.Remove {
-				eniStateManager.updateLock.Lock()
-				eniStateManager.removeDevice(evt.Name)
-				eniStateManager.updateLock.Unlock()
-			}
-		case erx := <-eniStateManager.watcher.Errors:
-			log.Debugf("FSNotify Error: %s", erx.Error())
-		}
-	}
 }
