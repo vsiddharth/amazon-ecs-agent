@@ -18,6 +18,8 @@ const (
 	TaskStatusNone TaskStatus = iota
 	// TaskPulled represents a task which has had all its container images pulled, but not all have yet progressed passed pull
 	TaskPulled
+	// TaskResourcesReady represents a task which has all its resources provisioned
+	TaskResourcesReady
 	// TaskCreated represents a task which has had all its containers created
 	TaskCreated
 	// TaskRunning represents a task which has had all its containers started

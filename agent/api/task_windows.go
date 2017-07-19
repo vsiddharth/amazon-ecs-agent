@@ -1,6 +1,6 @@
 // +build windows
 
-// Copyright 2014-2016 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+// Copyright 2014-2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
 // not use this file except in compliance with the License. A copy of the
@@ -18,6 +18,8 @@ package api
 import (
 	"path/filepath"
 	"strings"
+
+	docker "github.com/fsouza/go-dockerclient"
 )
 
 const (
@@ -49,4 +51,16 @@ func (task *Task) downcaseAllVolumePaths() {
 
 func getCanonicalPath(path string) string {
 	return filepath.Clean(strings.ToLower(path))
+}
+
+// setCgroupSpec populates the task cgroup spec
+func (task *Task) setCgroupSpec() error {
+	// NOTE: task cgroups are supported only on linux
+	return nil
+}
+
+// updateHostConfigWithCgroupParent sets the cgroup parent for containers
+func (task *Task) updateHostConfigWithCgroupParent(hostConfig *docker.HostConfig) error {
+	// NOTE: task cgroups are supported only on linux
+	return nil
 }

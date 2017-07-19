@@ -80,6 +80,9 @@ const (
 	// minimumNumImagesToDeletePerCycle specifies the minimum number of images that to be deleted when
 	// performing image cleanup.
 	minimumNumImagesToDeletePerCycle = 1
+
+	// Default cgroup prefix for ECS tasks
+	DefaultTaskCgroupPrefix = "/ecs"
 )
 
 // Merge merges two config files, preferring the ones on the left. Any nil or

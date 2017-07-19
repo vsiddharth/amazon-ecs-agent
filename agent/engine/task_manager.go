@@ -29,6 +29,7 @@ const (
 	stoppedSentWaitInterval               = 30 * time.Second
 	maxStoppedWaitTimes                   = 72 * time.Hour / stoppedSentWaitInterval
 	taskUnableToTransitionToStoppedReason = "TaskStateError: Agent could not progress task's state to stopped"
+	taskUnableToCreateCgroup              = "TaskStateError: Agent could not create task cgroup"
 )
 
 type acsTaskUpdate struct {
@@ -148,6 +149,22 @@ func (mtask *managedTask) overseeTask() {
 		if !mtask.GetKnownStatus().Terminal() {
 			// If we aren't terminal and we aren't steady state, we should be able to move some containers along
 			llog.Debug("Task not steady state or terminal; progressing it")
+
+			// TODO:
+			// 1) Determine better way to check feature enablement and
+			// cgroup hierarchy setup
+			// 2) Add new task resources provisioned state
+			if mtask.Task.CgroupEnabled() {
+				err := mtask.SetupCgroup()
+				if err != nil {
+					seelog.Errorf("Unable to set up task cgroup: %v", err)
+					// If task cgroup creation fails, set task status to stopped
+					// with valid reason
+					mtask.SetKnownStatus(api.TaskStopped)
+					mtask.engine.emitTaskEvent(mtask.Task, taskUnableToCreateCgroup)
+					return
+				}
+			}
 			mtask.progressContainers()
 		}
 
@@ -535,6 +552,14 @@ func (mtask *managedTask) cleanupTask(taskStoppedDuration time.Duration) {
 	// discard events while the task is being removed from engine state
 	go mtask.discardEventsUntil(handleCleanupDone)
 	mtask.engine.sweepTask(mtask.Task)
+
+	// Remove task cgroup
+	if mtask.Task.CgroupEnabled() {
+		err := mtask.CleanupCgroup()
+		if err != nil {
+			seelog.Warnf("Failed to cleanup task cgroup: %v", err)
+		}
+	}
 	// Now remove ourselves from the global state and cleanup channels
 	mtask.engine.processTasks.Lock()
 	mtask.engine.state.RemoveTask(mtask.Task)

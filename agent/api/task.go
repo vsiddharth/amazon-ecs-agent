@@ -15,7 +15,6 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -26,10 +25,13 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/acs/model/ecsacs"
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
 	"github.com/aws/amazon-ecs-agent/agent/engine/emptyvolume"
+	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
+	"github.com/aws/amazon-ecs-agent/agent/utils/arn"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
 	"github.com/aws/aws-sdk-go/private/protocol/json/jsonutil"
 	"github.com/cihub/seelog"
 	"github.com/fsouza/go-dockerclient"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -39,6 +41,10 @@ const (
 	// variable containers' config, which will be used by the AWS SDK to fetch
 	// credentials.
 	awsSDKCredentialsRelativeURIPathEnvironmentVariableName = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"
+
+	// Task Arn parsing related constants for obtaining task-id
+	arnDelimiterForwardSlash  = "/"
+	sectionResourceComponents = 2
 )
 
 // TaskOverrides are the overrides applied to a task
@@ -110,6 +116,12 @@ type Task struct {
 	// used to look up the credentials for task in the credentials manager
 	credentialsID     string
 	credentialsIDLock sync.RWMutex
+
+	// cgroupSpecLock to reliably update the cgroup spec
+	cgroupSpecLock sync.RWMutex
+
+	// CgroupSpec attribute to capture the cgroup spec
+	CgroupSpec *cgroup.Spec `json:omitempty`
 }
 
 // PostUnmarshalTask is run after a task has been unmarshalled, but before it has been
@@ -409,11 +421,20 @@ func (task *Task) dockerHostConfig(container *Container, dockerContainerMap map[
 		return nil, &HostConfigError{err.Error()}
 	}
 
+	// Populate hostConfig
 	hostConfig := &docker.HostConfig{
 		Links:        dockerLinkArr,
 		Binds:        binds,
 		PortBindings: dockerPortMap,
 		VolumesFrom:  volumesFrom,
+	}
+	// Set cgroup parent
+	// TODO: Feature gating
+	if task.CgroupEnabled() {
+		err = task.updateHostConfigWithCgroupParent(hostConfig)
+		if err != nil {
+			return nil, &HostConfigError{"Unable to set cgroup parent: " + err.Error()}
+		}
 	}
 
 	if container.DockerConfig.HostConfig != nil {
@@ -531,6 +552,12 @@ func TaskFromACS(acsTask *ecsacs.Task, envelope *ecsacs.PayloadMessage) (*Task, 
 		task.StopSequenceNumber = *envelope.SeqNum
 	}
 
+	// Placeholder to build task cgroup spec
+	// TODO: Feature gating
+	err = task.setCgroupSpec()
+	if err != nil {
+		return nil, err
+	}
 	return task, nil
 }
 
@@ -668,4 +695,32 @@ func (t *Task) String() string {
 		res += fmt.Sprintf("%s (%s->%s),", c.Name, c.GetKnownStatus().String(), c.GetDesiredStatus().String())
 	}
 	return res + "]"
+}
+
+// getID helps obtain the task-id from the taskArn
+// Arn reference: http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html#arn-syntax-ecs
+func (t *Task) getID() (string, error) {
+	parsedArn, err := arn.Parse(t.Arn)
+	if err != nil {
+		return "", errors.Wrapf(err, "task get-id: unable to parse taskArn")
+	}
+	resource := parsedArn.Resource
+
+	if !strings.Contains(resource, arnDelimiterForwardSlash) {
+		return "", errors.New("task get-id: unable to split taskArn resource")
+	}
+
+	taskIDSplit := strings.SplitN(resource, arnDelimiterForwardSlash, sectionResourceComponents)
+	if len(taskIDSplit) != sectionResourceComponents {
+		return "", errors.New("task get-id: unable to obtain id from taskArn resource")
+	}
+	return taskIDSplit[1], nil
+}
+
+// CgroupEnabled returns a bool when cgroupSpec is available
+func (task *Task) CgroupEnabled() bool {
+	task.cgroupSpecLock.RLock()
+	defer task.cgroupSpecLock.RUnlock()
+
+	return task.CgroupSpec != nil
 }
