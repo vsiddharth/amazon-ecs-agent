@@ -1,3 +1,5 @@
+// +build linux
+
 // Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
@@ -11,22 +13,29 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package cgroup
+package engine
 
 import (
-	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"testing"
+
+	"github.com/aws/amazon-ecs-agent/agent/api"
+	"github.com/stretchr/testify/assert"
 )
 
-// Spec captures the abstraction for a creating a new
-// cgroup based on root and the runtime specifications
-type Spec struct {
-	// Root is for the cgroup path
-	Root string
-	// Specs are for all the linux resources including cpu, memory, etc...
-	Specs *specs.LinuxResources
+func TestSetupCgroupWithInvalidSpec(t *testing.T) {
+	mtask := managedTask{
+		Task: &api.Task{},
+	}
+
+	err := mtask.SetupCgroup()
+	assert.Error(t, err, "invalid cgroup spec")
 }
 
-type CgroupWrapper interface {
-	Create(cgroupSpec *Spec) error
-	Remove(cgroupSpec *Spec) error
+func TestCleanupCgroupErrorPath(t *testing.T) {
+	mtask := managedTask{
+		Task: &api.Task{},
+	}
+
+	err := mtask.CleanupCgroup()
+	assert.Error(t, err)
 }

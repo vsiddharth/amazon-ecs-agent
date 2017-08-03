@@ -552,12 +552,6 @@ func TaskFromACS(acsTask *ecsacs.Task, envelope *ecsacs.PayloadMessage) (*Task, 
 		task.StopSequenceNumber = *envelope.SeqNum
 	}
 
-	// Placeholder to build task cgroup spec
-	// TODO: Feature gating
-	err = task.setCgroupSpec()
-	if err != nil {
-		return nil, err
-	}
 	return task, nil
 }
 
@@ -710,7 +704,7 @@ func (t *Task) getID() (string, error) {
 		return "", errors.New("task get-id: unable to split taskArn resource")
 	}
 
-	taskIDSplit := strings.SplitN(resource, arnDelimiterForwardSlash, sectionResourceComponents)
+	taskIDSplit := strings.Split(resource, arnDelimiterForwardSlash)
 	if len(taskIDSplit) != sectionResourceComponents {
 		return "", errors.New("task get-id: unable to obtain id from taskArn resource")
 	}
