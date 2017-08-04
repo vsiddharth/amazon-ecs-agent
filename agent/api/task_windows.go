@@ -53,12 +53,6 @@ func getCanonicalPath(path string) string {
 	return filepath.Clean(strings.ToLower(path))
 }
 
-// setCgroupSpec populates the task cgroup spec
-func (task *Task) setCgroupSpec() error {
-	// NOTE: task cgroups are supported only on linux
-	return nil
-}
-
 // updateHostConfigWithCgroupParent sets the cgroup parent for containers
 func (task *Task) updateHostConfigWithCgroupParent(hostConfig *docker.HostConfig) error {
 	// NOTE: task cgroups are supported only on linux

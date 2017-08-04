@@ -802,51 +802,18 @@ func assertSetStructFieldsEqual(t *testing.T, expected, actual interface{}) {
 	}
 }
 
-func TestCgroupEnabledWithDisabledSetup(t *testing.T) {
-	task := Task{
-		CgroupSpec: nil,
-	}
+// TestCgroupEnabledWithMissingSpec checks if task has cgroup
+func TestCgroupEnabledWithMissingSpec(t *testing.T) {
+	task := Task{}
 	status := task.CgroupEnabled()
 	assert.False(t, status, "missing spec")
 }
 
-func TestCgroupEnabledWithEnabledSetup(t *testing.T) {
+// TestCgroupEnabledWithSpec checks if task has cgroup spec
+func TestCgroupEnabledWithSpec(t *testing.T) {
 	task := Task{
 		CgroupSpec: &cgroup.Spec{},
 	}
 	status := task.CgroupEnabled()
-	assert.True(t, status, "missing spec")
-}
-
-func TestGetIDWithInvalidArn(t *testing.T) {
-	task := Task{
-		Arn: "invalid:task:arn",
-	}
-	_, err := task.getID()
-	assert.Error(t, err, "invalid arn")
-}
-
-func TestGetIDWithInvalidResource(t *testing.T) {
-	task := Task{
-		Arn: "arn:aws:ecs:region:account-id:task-task-id",
-	}
-	_, err := task.getID()
-	assert.Error(t, err, "invalid arn")
-}
-
-func TestGetIDWithInvalidResourcePartitions(t *testing.T) {
-	task := Task{
-		Arn: "arn:aws:ecs:region:account-id:task/task-id1/task-id2",
-	}
-	_, err := task.getID()
-	assert.Error(t, err, "invalid arn")
-}
-
-func TestGetIDHappyPath(t *testing.T) {
-	task := Task{
-		Arn: "arn:aws:ecs:region:account-id:task/task-id1",
-	}
-	_, err := task.getID()
-	assert.NoError(t, err)
-
+	assert.True(t, status)
 }

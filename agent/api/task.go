@@ -26,7 +26,6 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
 	"github.com/aws/amazon-ecs-agent/agent/engine/emptyvolume"
 	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
-	"github.com/aws/amazon-ecs-agent/agent/utils/arn"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
 	"github.com/aws/aws-sdk-go/private/protocol/json/jsonutil"
 	"github.com/cihub/seelog"
@@ -41,10 +40,6 @@ const (
 	// variable containers' config, which will be used by the AWS SDK to fetch
 	// credentials.
 	awsSDKCredentialsRelativeURIPathEnvironmentVariableName = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"
-
-	// Task Arn parsing related constants for obtaining task-id
-	arnDelimiterForwardSlash  = "/"
-	sectionResourceComponents = 2
 )
 
 // TaskOverrides are the overrides applied to a task
@@ -121,6 +116,7 @@ type Task struct {
 	cgroupSpecLock sync.RWMutex
 
 	// CgroupSpec attribute to capture the cgroup spec
+	// TODO: Inspect upon model changes
 	CgroupSpec *cgroup.Spec `json:omitempty`
 }
 
@@ -428,7 +424,7 @@ func (task *Task) dockerHostConfig(container *Container, dockerContainerMap map[
 		PortBindings: dockerPortMap,
 		VolumesFrom:  volumesFrom,
 	}
-	// Set cgroup parent
+	// Update cgroup parent
 	// TODO: Feature gating
 	if task.CgroupEnabled() {
 		err = task.updateHostConfigWithCgroupParent(hostConfig)
@@ -551,6 +547,8 @@ func TaskFromACS(acsTask *ecsacs.Task, envelope *ecsacs.PayloadMessage) (*Task, 
 	} else if task.GetDesiredStatus() == TaskStopped && envelope.SeqNum != nil {
 		task.StopSequenceNumber = *envelope.SeqNum
 	}
+
+	// TODO: Inspect CgroupSpec upon model changes
 
 	return task, nil
 }
@@ -689,26 +687,6 @@ func (t *Task) String() string {
 		res += fmt.Sprintf("%s (%s->%s),", c.Name, c.GetKnownStatus().String(), c.GetDesiredStatus().String())
 	}
 	return res + "]"
-}
-
-// getID helps obtain the task-id from the taskArn
-// Arn reference: http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html#arn-syntax-ecs
-func (t *Task) getID() (string, error) {
-	parsedArn, err := arn.Parse(t.Arn)
-	if err != nil {
-		return "", errors.Wrapf(err, "task get-id: unable to parse taskArn")
-	}
-	resource := parsedArn.Resource
-
-	if !strings.Contains(resource, arnDelimiterForwardSlash) {
-		return "", errors.New("task get-id: unable to split taskArn resource")
-	}
-
-	taskIDSplit := strings.Split(resource, arnDelimiterForwardSlash)
-	if len(taskIDSplit) != sectionResourceComponents {
-		return "", errors.New("task get-id: unable to obtain id from taskArn resource")
-	}
-	return taskIDSplit[1], nil
 }
 
 // CgroupEnabled returns a bool when cgroupSpec is available

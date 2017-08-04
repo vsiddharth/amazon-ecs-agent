@@ -22,17 +22,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TODO: Add tests to cover happy paths
+
+// TestValidateCgroupSpecWithEmptySpec checks for empty cgroup spec
 func TestValidateCgroupSpecWithEmptySpec(t *testing.T) {
 	err := validateCgroupSpec(nil)
 	assert.Error(t, err, "empty cgroup spec")
 }
 
+// TestValidateCgroupSpecWithMissingRoot checks for missing cgroup root
 func TestValidateCgroupSpecWithMissingRoot(t *testing.T) {
 	cgroupSpec := Spec{}
 	err := validateCgroupSpec(&cgroupSpec)
 	assert.Error(t, err, "missing cgroup root")
 }
 
+// TestValidateCgroupSpecWithNonECSPrefix checks for non-ecs cgroup root prefix
 func TestValidateCgroupSpecWithNonECSPrefix(t *testing.T) {
 	cgroupSpec := Spec{
 		Root: "/non-ecs/root",
@@ -42,15 +47,17 @@ func TestValidateCgroupSpecWithNonECSPrefix(t *testing.T) {
 	assert.Error(t, err, "cgroup root missing ecs prefix")
 }
 
+// TestValidateCgroupSpecWithMissingResourceSpecs checks for cgroup spec with
+// missing linux resource specs
 func TestValidateCgroupSpecWithMissingResourceSpecs(t *testing.T) {
 	cgroupSpec := Spec{
-		Root:  "/ecs/task-id",
-		Specs: nil,
+		Root: "/ecs/task-id",
 	}
 	err := validateCgroupSpec(&cgroupSpec)
 	assert.Error(t, err, "cgroup spec missing resource specs")
 }
 
+// TestValidateCgroupSpecWithHappyPath checks the happy path of the validator
 func TestValidateCgroupSpecWithHappyPath(t *testing.T) {
 	cgroupSpec := Spec{
 		Root:  "/ecs/task-id",
@@ -60,28 +67,28 @@ func TestValidateCgroupSpecWithHappyPath(t *testing.T) {
 	assert.NoError(t, err, "happy path")
 }
 
+// TestCreateWithInvalidSpec checks to create cgroups based off invalid specs
 func TestCreateWithInvalidSpec(t *testing.T) {
 	invalidCgroupSpec := Spec{
-		Root:  "/ecs/task-id",
-		Specs: nil,
+		Root: "/ecs/task-id",
 	}
 	err := Create(&invalidCgroupSpec)
 	assert.Error(t, err, "invalid cgroup spec")
 }
 
+// TestLoadWithInvalidSpec checks if invalid cgroups can be loaded
 func TestLoadWithInvalidSpec(t *testing.T) {
 	invalidCgroupSpec := Spec{
-		Root:  "/ecs/task-id",
-		Specs: nil,
+		Root: "/ecs/task-id",
 	}
 	_, err := load(&invalidCgroupSpec)
 	assert.Error(t, err, "invalid cgroup spec")
 }
 
+// TestRemoveWithInvalidSpec checks if invalid cgroup specs can be removed
 func TestRemoveWithInvalidSpec(t *testing.T) {
 	invalidCgroupSpec := Spec{
-		Root:  "/ecs/task-id",
-		Specs: nil,
+		Root: "/ecs/task-id",
 	}
 	err := Remove(&invalidCgroupSpec)
 	assert.Error(t, err, "invalid cgroup spec")

@@ -16,12 +16,8 @@
 package api
 
 import (
-	"fmt"
-
-	"github.com/aws/amazon-ecs-agent/agent/config"
 	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
 	docker "github.com/fsouza/go-dockerclient"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/pkg/errors"
 )
@@ -33,33 +29,6 @@ const (
 func (task *Task) adjustForPlatform() {}
 
 func getCanonicalPath(path string) string { return path }
-
-// setCgroupSpec populates the task cgroup spec
-func (task *Task) setCgroupSpec() error {
-	taskID, err := task.getID()
-	if err != nil {
-		return errors.Wrapf(err, "task build platform specific attributes: unable to obtain task id")
-	}
-
-	// Setup cgroup root
-	cgRoot := fmt.Sprintf("%s/%s", config.DefaultTaskCgroupPrefix, taskID)
-
-	// TODO: Update spec once changes are available from ACS
-	linuxResourceSpec := specs.LinuxResources{}
-
-	// Populate Spec for cgroup
-	cgroupSpec := cgroup.Spec{
-		Root:  cgRoot,
-		Specs: &linuxResourceSpec,
-	}
-
-	task.cgroupSpecLock.Lock()
-	defer task.cgroupSpecLock.Unlock()
-
-	task.CgroupSpec = &cgroupSpec
-
-	return nil
-}
 
 // GetCgroupSpec fetches the task cgroup spec
 func (task *Task) GetCgroupSpec() (cgroup.Spec, error) {
@@ -83,7 +52,7 @@ func (task *Task) updateHostConfigWithCgroupParent(hostConfig *docker.HostConfig
 
 	// Check for empty cgroup root
 	if cgroupSpec.Root == "" {
-		return errors.Wrapf(err, "task set cgroup parent: empty cgroup root")
+		return errors.New("task set cgroup parent: empty cgroup root")
 	}
 
 	// Set cgroup parent

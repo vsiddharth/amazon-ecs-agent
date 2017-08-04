@@ -32,7 +32,6 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/eventstream"
 	"github.com/aws/amazon-ecs-agent/agent/handlers"
 	credentialshandler "github.com/aws/amazon-ecs-agent/agent/handlers/credentials"
-	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
 	"github.com/aws/amazon-ecs-agent/agent/sighandlers"
 	"github.com/aws/amazon-ecs-agent/agent/sighandlers/exitcodes"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
@@ -165,6 +164,9 @@ func (agent *ecsAgent) doStart(containerChangeEventStream *eventstream.EventStre
 		log.Criticalf("Error creating state manager: %v", err)
 		return exitcodes.ExitTerminal
 	}
+	// TODO:
+	// 1) Feature gate ECS cgroup root init
+	// 2) Update mocks and unit tests
 
 	// Register the container instance
 	err = agent.registerContainerInstance(taskEngine, stateManager, client)
@@ -188,13 +190,6 @@ func (agent *ecsAgent) doStart(containerChangeEventStream *eventstream.EventStre
 	agent.startAsyncRoutines(containerChangeEventStream, credentialsManager, imageManager,
 		taskEngine, stateManager, deregisterInstanceEventStream, client, taskHandler)
 
-	// Create ECS cgroup root
-	// TODO: Feature gating and cleanup
-	err = cgroup.Init()
-	if err != nil {
-		log.Criticalf("Error creating cgroup root for ecs: %v", err)
-		return exitcodes.ExitTerminal
-	}
 	// Start the acs session, which should block doStart
 	return agent.startACSSession(credentialsManager, taskEngine, stateManager,
 		deregisterInstanceEventStream, client, taskHandler)

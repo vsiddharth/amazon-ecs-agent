@@ -38,27 +38,7 @@ const (
 	expectedEmptyVoluemContainerCmd   = "not-applicable"
 )
 
-func TestSetCgroupSpecWithInvalidTaskID(t *testing.T) {
-	task := Task{
-		Arn: "invalid-arn",
-	}
-	err := task.setCgroupSpec()
-	assert.Error(t, err, "invalid task arn")
-}
-
-func TestSetCgroupSpecWithValidTaskID(t *testing.T) {
-	task := Task{
-		Arn: "arn:aws:ecs:region:account-id:task/task-id",
-		CgroupSpec: &cgroup.Spec{
-			Root:  "/ecs/task-id1",
-			Specs: &specs.LinuxResources{},
-		},
-	}
-	err := task.setCgroupSpec()
-	assert.NoError(t, err)
-	assert.NotNil(t, task.CgroupSpec)
-}
-
+// TestGetCgroupSpecWithMissingCgroupSpec attempts to retrieve a non-existent cgroup spec
 func TestGetCgroupSpecWithMissingCgroupSpec(t *testing.T) {
 	task := Task{}
 
@@ -66,6 +46,7 @@ func TestGetCgroupSpecWithMissingCgroupSpec(t *testing.T) {
 	assert.Error(t, err, "missing cgroup spec")
 }
 
+// TestGetCgroupSpecWithValidCgroupSpec checks if valid cgroup specs can be retrieved
 func TestGetCgroupSpecWithValidCgroupSpec(t *testing.T) {
 	task := Task{
 		CgroupSpec: &cgroup.Spec{},
@@ -74,14 +55,34 @@ func TestGetCgroupSpecWithValidCgroupSpec(t *testing.T) {
 	assert.NoError(t, err, "success")
 }
 
+// TestUpdateHostConfigWithCgroupParentWithInvalidCgroupSpec checks if hostConfig
+// can be updated for task with no cgroup spec
 func TestUpdateHostConfigWithCgroupParentWithInvalidCgroupSpec(t *testing.T) {
 	task := Task{}
 	hostConfig := &docker.HostConfig{}
 
 	err := task.updateHostConfigWithCgroupParent(hostConfig)
 	assert.Error(t, err, "invalid cgroup spec")
+	assert.Empty(t, hostConfig.CgroupParent)
 }
 
+// TestUpdateHostConfigWithEmptyCgroupRoot checks for empty cgroup root
+func TestUpdateHostConfigWithEmptyCgroupRoot(t *testing.T) {
+	cgroupSpec := cgroup.Spec{
+		Root:  "",
+		Specs: &specs.LinuxResources{},
+	}
+	task := Task{
+		CgroupSpec: &cgroupSpec,
+	}
+	hostConfig := &docker.HostConfig{}
+
+	err := task.updateHostConfigWithCgroupParent(hostConfig)
+	assert.Error(t, err, "empty group root")
+}
+
+// TestUpdateHostConfigWithCgroupParentHappyPath checks if hostConfig can be updated
+// from a task with cgroup spec
 func TestUpdateHostConfigWithCgroupParentHappyPath(t *testing.T) {
 	cgroupSpec := cgroup.Spec{
 		Root:  "/ecs/task-id",
@@ -93,5 +94,7 @@ func TestUpdateHostConfigWithCgroupParentHappyPath(t *testing.T) {
 	hostConfig := &docker.HostConfig{}
 
 	err := task.updateHostConfigWithCgroupParent(hostConfig)
-	assert.NoError(t, err, "invalid cgroup spec")
+	assert.NoError(t, err, "valid cgroup spec")
+	assert.NotEmpty(t, hostConfig.CgroupParent)
+	assert.Equal(t, "/ecs/task-id", hostConfig.CgroupParent)
 }

@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// TestSetupCgroupWithInvalidSpec checks if managedTask can be setup with an
+// invalid cgroup spec
 func TestSetupCgroupWithInvalidSpec(t *testing.T) {
 	mtask := managedTask{
 		Task: &api.Task{},
@@ -31,6 +33,8 @@ func TestSetupCgroupWithInvalidSpec(t *testing.T) {
 	assert.Error(t, err, "invalid cgroup spec")
 }
 
+// TestCleanupCgroupErrorPath attempts to check cgroup cleanup can be performed
+// based off an erroneous spec
 func TestCleanupCgroupErrorPath(t *testing.T) {
 	mtask := managedTask{
 		Task: &api.Task{},
@@ -39,3 +43,5 @@ func TestCleanupCgroupErrorPath(t *testing.T) {
 	err := mtask.CleanupCgroup()
 	assert.Error(t, err)
 }
+
+// TODO: Add tests to cover happy paths

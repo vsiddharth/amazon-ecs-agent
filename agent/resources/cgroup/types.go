@@ -26,7 +26,4 @@ type Spec struct {
 	Specs *specs.LinuxResources
 }
 
-type CgroupWrapper interface {
-	Create(cgroupSpec *Spec) error
-	Remove(cgroupSpec *Spec) error
-}
+// TODO: Add testing interface
