@@ -37,16 +37,6 @@ func TestValidateCgroupSpecWithMissingRoot(t *testing.T) {
 	assert.Error(t, err, "missing cgroup root")
 }
 
-// TestValidateCgroupSpecWithNonECSPrefix checks for non-ecs cgroup root prefix
-func TestValidateCgroupSpecWithNonECSPrefix(t *testing.T) {
-	cgroupSpec := Spec{
-		Root: "/non-ecs/root",
-	}
-
-	err := validateCgroupSpec(&cgroupSpec)
-	assert.Error(t, err, "cgroup root missing ecs prefix")
-}
-
 // TestValidateCgroupSpecWithMissingResourceSpecs checks for cgroup spec with
 // missing linux resource specs
 func TestValidateCgroupSpecWithMissingResourceSpecs(t *testing.T) {

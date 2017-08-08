@@ -817,3 +817,20 @@ func TestCgroupEnabledWithSpec(t *testing.T) {
 	status := task.CgroupEnabled()
 	assert.True(t, status)
 }
+
+// TestGetCgroupSpecWithMissingCgroupSpec attempts to retrieve a non-existent cgroup spec
+func TestGetCgroupSpecWithMissingCgroupSpec(t *testing.T) {
+	task := Task{}
+
+	_, err := task.GetCgroupSpec()
+	assert.Error(t, err, "missing cgroup spec")
+}
+
+// TestGetCgroupSpecWithValidCgroupSpec checks if valid cgroup specs can be retrieved
+func TestGetCgroupSpecWithValidCgroupSpec(t *testing.T) {
+	task := Task{
+		CgroupSpec: &cgroup.Spec{},
+	}
+	_, err := task.GetCgroupSpec()
+	assert.NoError(t, err, "success")
+}

@@ -18,8 +18,6 @@ package api
 import (
 	"path/filepath"
 	"strings"
-
-	docker "github.com/fsouza/go-dockerclient"
 )
 
 const (
@@ -51,10 +49,4 @@ func (task *Task) downcaseAllVolumePaths() {
 
 func getCanonicalPath(path string) string {
 	return filepath.Clean(strings.ToLower(path))
-}
-
-// updateHostConfigWithCgroupParent sets the cgroup parent for containers
-func (task *Task) updateHostConfigWithCgroupParent(hostConfig *docker.HostConfig) error {
-	// NOTE: task cgroups are supported only on linux
-	return nil
 }

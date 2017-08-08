@@ -157,10 +157,11 @@ func (mtask *managedTask) overseeTask() {
 			if mtask.Task.CgroupEnabled() {
 				err := mtask.SetupCgroup()
 				if err != nil {
-					seelog.Errorf("Unable to set up task cgroup: %v", err)
+					seelog.Errorf("Unable to set up task cgroup for task %s: %v", mtask.Task.Arn, err)
 					// If task cgroup creation fails, set task status to stopped
 					// with valid reason
 					mtask.SetKnownStatus(api.TaskStopped)
+					mtask.SetDesiredStatus(api.TaskStopped)
 					mtask.engine.emitTaskEvent(mtask.Task, taskUnableToCreateCgroup)
 					return
 				}
@@ -557,7 +558,7 @@ func (mtask *managedTask) cleanupTask(taskStoppedDuration time.Duration) {
 	if mtask.Task.CgroupEnabled() {
 		err := mtask.CleanupCgroup()
 		if err != nil {
-			seelog.Warnf("Failed to cleanup task cgroup: %v", err)
+			seelog.Warnf("Failed to cleanup task cgroup for task %s: %v", mtask.Task.Arn, err)
 		}
 	}
 	// Now remove ourselves from the global state and cleanup channels

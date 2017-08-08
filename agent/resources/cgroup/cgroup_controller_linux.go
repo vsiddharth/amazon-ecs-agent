@@ -16,10 +16,6 @@
 package cgroup
 
 import (
-	"path/filepath"
-
-	"github.com/aws/amazon-ecs-agent/agent/config"
-
 	"github.com/cihub/seelog"
 	"github.com/containerd/cgroups"
 	"github.com/pkg/errors"
@@ -33,10 +29,6 @@ func validateCgroupSpec(cgroupSpec *Spec) error {
 
 	if cgroupSpec.Root == "" {
 		return errors.New("cgroup spec validator: invalid cgroup root")
-	}
-
-	if !filepath.HasPrefix(cgroupSpec.Root, config.DefaultTaskCgroupPrefix) {
-		return errors.New("cgroup spec validator: missing root ECS cgroup prefix")
 	}
 
 	// Validate the linux resource specs
@@ -73,8 +65,7 @@ func load(cgroupSpec *Spec) (cgroups.Cgroup, error) {
 	// Validate incoming spec
 	err := validateCgroupSpec(cgroupSpec)
 	if err != nil {
-		return nil,
-			errors.Wrapf(err, "cgroup load: failed to validate spec")
+		return nil, errors.Wrapf(err, "cgroup load: failed to validate spec")
 	}
 
 	// Load cgroup

@@ -427,10 +427,19 @@ func (task *Task) dockerHostConfig(container *Container, dockerContainerMap map[
 	// Update cgroup parent
 	// TODO: Feature gating
 	if task.CgroupEnabled() {
-		err = task.updateHostConfigWithCgroupParent(hostConfig)
+		// Grab cgroup spec
+		cgroupSpec, err := task.GetCgroupSpec()
 		if err != nil {
 			return nil, &HostConfigError{"Unable to set cgroup parent: " + err.Error()}
 		}
+
+		// Check for empty cgroup root
+		if cgroupSpec.Root == "" {
+			return nil, &HostConfigError{"Unable to set cgroup parent: empty cgroup root"}
+		}
+
+		// Set cgroup parent
+		hostConfig.CgroupParent = cgroupSpec.Root
 	}
 
 	if container.DockerConfig.HostConfig != nil {
@@ -695,4 +704,16 @@ func (task *Task) CgroupEnabled() bool {
 	defer task.cgroupSpecLock.RUnlock()
 
 	return task.CgroupSpec != nil
+}
+
+// GetCgroupSpec fetches the task cgroup spec
+func (task *Task) GetCgroupSpec() (cgroup.Spec, error) {
+	task.cgroupSpecLock.RLock()
+	defer task.cgroupSpecLock.RUnlock()
+
+	if task.CgroupSpec == nil {
+		return cgroup.Spec{}, errors.New("task cgroup: missing spec")
+	}
+
+	return *task.CgroupSpec, nil
 }

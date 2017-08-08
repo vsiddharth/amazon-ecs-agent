@@ -28,7 +28,7 @@ func (mtask *managedTask) SetupCgroup() error {
 	if err != nil {
 		return errors.Wrapf(err, "cgroup setup: unable to obtain cgroup spec")
 	}
-	seelog.Debugf("Setting up task cgroup %s", cgroupSpec.Root)
+	seelog.Debugf("Setting up task cgroup %s for task %s", cgroupSpec.Root, mtask.Task.Arn)
 
 	// Create cgroup
 	err = cgroup.Create(&cgroupSpec)
@@ -45,7 +45,7 @@ func (mtask *managedTask) CleanupCgroup() error {
 	if err != nil {
 		return errors.Wrapf(err, "cgroup cleanup: unable to obtain cgroup spec")
 	}
-	seelog.Debugf("Cleaning up task cgroup %s", cgroupSpec.Root)
+	seelog.Debugf("Cleaning up task cgroup %s for task %s", cgroupSpec.Root, mtask.Task.Arn)
 
 	return cgroup.Remove(&cgroupSpec)
 }
