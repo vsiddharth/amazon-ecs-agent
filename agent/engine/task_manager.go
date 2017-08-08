@@ -150,21 +150,16 @@ func (mtask *managedTask) overseeTask() {
 			// If we aren't terminal and we aren't steady state, we should be able to move some containers along
 			llog.Debug("Task not steady state or terminal; progressing it")
 
-			// TODO:
-			// 1) Determine better way to check feature enablement and
-			// cgroup hierarchy setup
-			// 2) Add new task resources provisioned state
-			if mtask.Task.CgroupEnabled() {
-				err := mtask.SetupCgroup()
-				if err != nil {
-					seelog.Errorf("Unable to set up task cgroup for task %s: %v", mtask.Task.Arn, err)
-					// If task cgroup creation fails, set task status to stopped
-					// with valid reason
-					mtask.SetKnownStatus(api.TaskStopped)
-					mtask.SetDesiredStatus(api.TaskStopped)
-					mtask.engine.emitTaskEvent(mtask.Task, taskUnableToCreateCgroup)
-					return
-				}
+			// TODO: Add new task resources provisioned state ?
+			err := mtask.SetupPlatformResources()
+			if err != nil {
+				seelog.Errorf("Unable to set up resources for task %s: %v", mtask.Task.Arn, err)
+				// If task cgroup creation fails, set task status to stopped
+				// with valid reason
+				mtask.SetKnownStatus(api.TaskStopped)
+				mtask.SetDesiredStatus(api.TaskStopped)
+				mtask.engine.emitTaskEvent(mtask.Task, taskUnableToCreateCgroup)
+				return
 			}
 			mtask.progressContainers()
 		}
@@ -554,13 +549,12 @@ func (mtask *managedTask) cleanupTask(taskStoppedDuration time.Duration) {
 	go mtask.discardEventsUntil(handleCleanupDone)
 	mtask.engine.sweepTask(mtask.Task)
 
-	// Remove task cgroup
-	if mtask.Task.CgroupEnabled() {
-		err := mtask.CleanupCgroup()
-		if err != nil {
-			seelog.Warnf("Failed to cleanup task cgroup for task %s: %v", mtask.Task.Arn, err)
-		}
+	// Remove task resources
+	err := mtask.CleanupPlatformResources()
+	if err != nil {
+		seelog.Warnf("Unable to cleanup task resources for task %s: %v", mtask.Task.Arn, err)
 	}
+
 	// Now remove ourselves from the global state and cleanup channels
 	mtask.engine.processTasks.Lock()
 	mtask.engine.state.RemoveTask(mtask.Task)

@@ -29,7 +29,7 @@ func TestSetupCgroupWithInvalidSpec(t *testing.T) {
 		Task: &api.Task{},
 	}
 
-	err := mtask.SetupCgroup()
+	err := mtask.setupCgroup()
 	assert.Error(t, err, "invalid cgroup spec")
 }
 
@@ -40,8 +40,30 @@ func TestCleanupCgroupErrorPath(t *testing.T) {
 		Task: &api.Task{},
 	}
 
-	err := mtask.CleanupCgroup()
+	err := mtask.cleanupCgroup()
 	assert.Error(t, err)
+}
+
+// TestSetupPlatformResourcesWithCgroupDisabled checks if platform resources
+// can be setup without errors when task cgroups are disabled
+func TestSetupPlatformResourcesWithCgroupDisabled(t *testing.T) {
+	mtask := managedTask{
+		Task: &api.Task{},
+	}
+
+	err := mtask.SetupPlatformResources()
+	assert.Nil(t, err)
+}
+
+// TestCleanupPlatformResourcesWithCgroupDisabled checks if platform resources
+// can be cleaned up without errors when task cgroups are disabled
+func TestCleanupPlatformResourcesWithCgroupDisabled(t *testing.T) {
+	mtask := managedTask{
+		Task: &api.Task{},
+	}
+
+	err := mtask.CleanupPlatformResources()
+	assert.Nil(t, err)
 }
 
 // TODO: Add tests to cover happy paths

@@ -15,14 +15,12 @@
 
 package engine
 
-// SetupCgroup sets up the cgroup for each managed task
-func (mtask *managedTask) SetupCgroup() error {
-	// NOTE: task cgroups are supported only on linux
+// SetupPlatformResources sets up platform level resources
+func (mtask *managedTask) SetupPlatformResources() error {
 	return nil
 }
 
-// CleanupCgroup removes the task cgroup
-func (mtask *managedTask) CleanupCgroup() error {
-	// NOTE: task cgroups are supported only on linux
+// CleanupPlatformResources cleans up platform level resources
+func (mtask *managedTask) CleanupPlatformResources() error {
 	return nil
 }

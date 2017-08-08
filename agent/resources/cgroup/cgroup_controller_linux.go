@@ -21,23 +21,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// validateCgroupSpec checks the cgroup spec for valid root and specifications
-func validateCgroupSpec(cgroupSpec *Spec) error {
-	if cgroupSpec == nil {
-		return errors.New("cgroup spec validator: empty cgroup spec")
-	}
-
-	if cgroupSpec.Root == "" {
-		return errors.New("cgroup spec validator: invalid cgroup root")
-	}
-
-	// Validate the linux resource specs
-	if cgroupSpec.Specs == nil {
-		return errors.New("cgroup spec validator: empty linux resource spec")
-	}
-	return nil
-}
-
 // Create creates a new cgroup based off the spec post validation
 func Create(cgroupSpec *Spec) error {
 	seelog.Debugf("Creating cgroup %s", cgroupSpec.Root)
@@ -58,6 +41,19 @@ func Create(cgroupSpec *Spec) error {
 	return nil
 }
 
+// Remove is used to delete the cgroup
+func Remove(cgroupSpec *Spec) error {
+	seelog.Debugf("Removing cgroup %s", cgroupSpec.Root)
+
+	control, err := load(cgroupSpec)
+	if err != nil {
+		return errors.Wrapf(err, "cgroup remove: unable to obtain controller")
+	}
+
+	// Delete cgroup
+	return control.Delete()
+}
+
 // load is used to load the cgroup based off the spec post validation
 func load(cgroupSpec *Spec) (cgroups.Cgroup, error) {
 	seelog.Debugf("Loading cgroup %s", cgroupSpec.Root)
@@ -72,15 +68,19 @@ func load(cgroupSpec *Spec) (cgroups.Cgroup, error) {
 	return cgroups.Load(cgroups.V1, cgroups.StaticPath(cgroupSpec.Root))
 }
 
-// Remove is used to delete the cgroup
-func Remove(cgroupSpec *Spec) error {
-	seelog.Debugf("Removing cgroup %s", cgroupSpec.Root)
-
-	control, err := load(cgroupSpec)
-	if err != nil {
-		return errors.Wrapf(err, "cgroup remove: unable to obtain controller")
+// validateCgroupSpec checks the cgroup spec for valid root and specifications
+func validateCgroupSpec(cgroupSpec *Spec) error {
+	if cgroupSpec == nil {
+		return errors.New("cgroup spec validator: empty cgroup spec")
 	}
 
-	// Delete cgroup
-	return control.Delete()
+	if cgroupSpec.Root == "" {
+		return errors.New("cgroup spec validator: invalid cgroup root")
+	}
+
+	// Validate the linux resource specs
+	if cgroupSpec.Specs == nil {
+		return errors.New("cgroup spec validator: empty linux resource spec")
+	}
+	return nil
 }

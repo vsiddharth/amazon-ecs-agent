@@ -112,12 +112,12 @@ type Task struct {
 	credentialsID     string
 	credentialsIDLock sync.RWMutex
 
-	// cgroupSpecLock to reliably update the cgroup spec
-	cgroupSpecLock sync.RWMutex
-
 	// CgroupSpec attribute to capture the cgroup spec
 	// TODO: Inspect upon model changes
 	CgroupSpec *cgroup.Spec `json:omitempty`
+
+	// cgroupSpecLock to reliably update the cgroup spec
+	cgroupSpecLock sync.RWMutex
 }
 
 // PostUnmarshalTask is run after a task has been unmarshalled, but before it has been

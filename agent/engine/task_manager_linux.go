@@ -21,8 +21,24 @@ import (
 	"github.com/pkg/errors"
 )
 
-// SetupCgroup sets up the cgroup for each managed task
-func (mtask *managedTask) SetupCgroup() error {
+// SetupPlatformResources sets up platform level resources
+func (mtask *managedTask) SetupPlatformResources() error {
+	if mtask.Task.CgroupEnabled() {
+		return mtask.setupCgroup()
+	}
+	return nil
+}
+
+// CleanupPlatformResources cleans up platform level resources
+func (mtask *managedTask) CleanupPlatformResources() error {
+	if mtask.Task.CgroupEnabled() {
+		return mtask.cleanupCgroup()
+	}
+	return nil
+}
+
+// setupCgroup sets up the cgroup for each managed task
+func (mtask *managedTask) setupCgroup() error {
 	// Grab cgroup spec
 	cgroupSpec, err := mtask.Task.GetCgroupSpec()
 	if err != nil {
@@ -38,8 +54,8 @@ func (mtask *managedTask) SetupCgroup() error {
 	return nil
 }
 
-// CleanupCgroup removes the task cgroup
-func (mtask *managedTask) CleanupCgroup() error {
+// cleanupCgroup removes the task cgroup
+func (mtask *managedTask) cleanupCgroup() error {
 	// Grab cgroup spec
 	cgroupSpec, err := mtask.Task.GetCgroupSpec()
 	if err != nil {
