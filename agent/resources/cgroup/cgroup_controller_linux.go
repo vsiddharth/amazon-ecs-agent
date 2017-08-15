@@ -18,34 +18,36 @@ package cgroup
 import (
 	"github.com/cihub/seelog"
 	"github.com/containerd/cgroups"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 )
 
-// Create creates a new cgroup based off the spec post validation
-func Create(cgroupSpec *Spec) error {
-	seelog.Debugf("Creating cgroup %s", cgroupSpec.Root)
+var factory CgroupFactory = &GlobalCgroupFactory{}
 
+// Create creates a new cgroup based off the spec post validation
+func Create(cgroupSpec *Spec) (cgroups.Cgroup, error) {
 	// Validate incoming spec
 	err := validateCgroupSpec(cgroupSpec)
 	if err != nil {
-		return errors.Wrapf(err, "cgroup create: failed to validate spec")
+		return nil, errors.Wrapf(err, "cgroup create: failed to validate spec")
 	}
 
 	// Create cgroup
-	_, err = cgroups.New(cgroups.V1, cgroups.StaticPath(cgroupSpec.Root), cgroupSpec.Specs)
+	seelog.Infof("Creating cgroup %s", cgroupSpec.Root)
+	control, err := factory.New(cgroups.V1, cgroups.StaticPath(cgroupSpec.Root), cgroupSpec.Specs)
 
 	if err != nil {
-		return errors.Wrapf(err, "cgroup create: unable to create controller")
+		return nil, errors.Wrapf(err, "cgroup create: unable to create controller")
 	}
 
-	return nil
+	return control, nil
 }
 
 // Remove is used to delete the cgroup
-func Remove(cgroupSpec *Spec) error {
-	seelog.Debugf("Removing cgroup %s", cgroupSpec.Root)
+func Remove(cgroupPath string) error {
+	seelog.Debugf("Removing cgroup %s", cgroupPath)
 
-	control, err := load(cgroupSpec)
+	control, err := factory.Load(cgroups.V1, cgroups.StaticPath(cgroupPath))
 	if err != nil {
 		return errors.Wrapf(err, "cgroup remove: unable to obtain controller")
 	}
@@ -54,21 +56,7 @@ func Remove(cgroupSpec *Spec) error {
 	return control.Delete()
 }
 
-// load is used to load the cgroup based off the spec post validation
-func load(cgroupSpec *Spec) (cgroups.Cgroup, error) {
-	seelog.Debugf("Loading cgroup %s", cgroupSpec.Root)
-
-	// Validate incoming spec
-	err := validateCgroupSpec(cgroupSpec)
-	if err != nil {
-		return nil, errors.Wrapf(err, "cgroup load: failed to validate spec")
-	}
-
-	// Load cgroup
-	return cgroups.Load(cgroups.V1, cgroups.StaticPath(cgroupSpec.Root))
-}
-
-// validateCgroupSpec checks the cgroup spec for valid root and specifications
+// validateCgroupSpec checks the cgroup spec for valid path and specifications
 func validateCgroupSpec(cgroupSpec *Spec) error {
 	if cgroupSpec == nil {
 		return errors.New("cgroup spec validator: empty cgroup spec")
@@ -83,4 +71,21 @@ func validateCgroupSpec(cgroupSpec *Spec) error {
 		return errors.New("cgroup spec validator: empty linux resource spec")
 	}
 	return nil
+}
+
+//go:generate go run ../../../scripts/generate/mockgen.go github.com/containerd/cgroups Cgroup mock/cgroups.go
+type CgroupFactory interface {
+	New(hierarchy cgroups.Hierarchy, path cgroups.Path, specs *specs.LinuxResources) (cgroups.Cgroup, error)
+	Load(hierarchy cgroups.Hierarchy, path cgroups.Path) (cgroups.Cgroup, error)
+}
+
+// GlobalCgroupFactory calls the cgroups library global functions
+type GlobalCgroupFactory struct{}
+
+func (c *GlobalCgroupFactory) Load(hierarchy cgroups.Hierarchy, path cgroups.Path) (cgroups.Cgroup, error) {
+	return cgroups.Load(hierarchy, path)
+}
+
+func (c *GlobalCgroupFactory) New(hierarchy cgroups.Hierarchy, path cgroups.Path, specs *specs.LinuxResources) (cgroups.Cgroup, error) {
+	return cgroups.New(hierarchy, path, specs)
 }

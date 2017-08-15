@@ -20,10 +20,8 @@ import (
 // Spec captures the abstraction for a creating a new
 // cgroup based on root and the runtime specifications
 type Spec struct {
-	// Root is for the cgroup path
+	// Root is the cgroup path
 	Root string
 	// Specs are for all the linux resources including cpu, memory, etc...
 	Specs *specs.LinuxResources
 }
-
-// TODO: Add testing interface

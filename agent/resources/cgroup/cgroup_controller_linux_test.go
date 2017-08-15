@@ -18,69 +18,111 @@ package cgroup
 import (
 	"testing"
 
+	"errors"
+	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup/mock"
+	"github.com/containerd/cgroups"
+	"github.com/golang/mock/gomock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
 
-// TODO: Add tests to cover happy paths
+func TestCreateHappyCase(t *testing.T) {
+	ctrl, testGroup, _ := setupMocks(t)
+	defer ctrl.Finish()
 
-// TestValidateCgroupSpecWithEmptySpec checks for empty cgroup spec
-func TestValidateCgroupSpecWithEmptySpec(t *testing.T) {
-	err := validateCgroupSpec(nil)
-	assert.Error(t, err, "empty cgroup spec")
+	testString := "/ecs/foo"
+	testSpecs := &specs.LinuxResources{}
+
+	res, err := Create(&Spec{testString, testSpecs})
+	assert.Equal(t, testGroup, res)
+	assert.NoError(t, err)
 }
 
-// TestValidateCgroupSpecWithMissingRoot checks for missing cgroup root
-func TestValidateCgroupSpecWithMissingRoot(t *testing.T) {
-	cgroupSpec := Spec{}
-	err := validateCgroupSpec(&cgroupSpec)
-	assert.Error(t, err, "missing cgroup root")
+func TestCreateErrorCase(t *testing.T) {
+	ctrl, _, mockFactory := setupMocks(t)
+	defer ctrl.Finish()
+
+	mockFactory.err = errors.New("cgroup exploded")
+
+	res, err := Create(&Spec{"/ecs/foo", &specs.LinuxResources{}})
+	assert.Nil(t, res)
+	assert.Error(t, err)
 }
 
-// TestValidateCgroupSpecWithMissingResourceSpecs checks for cgroup spec with
-// missing linux resource specs
-func TestValidateCgroupSpecWithMissingResourceSpecs(t *testing.T) {
-	cgroupSpec := Spec{
-		Root: "/ecs/task-id",
+func TestCreateWithBadSpecs(t *testing.T) {
+	ctrl, _, _ := setupMocks(t)
+	defer ctrl.Finish()
+
+	var nil_string string
+
+	testCases := []struct {
+		spec *Spec
+		name string
+	}{
+		{&Spec{"", nil}, "empty root and nil spec"},
+		{&Spec{"/ecs/foo", nil}, "root with nil spec"},
+		{&Spec{"", &specs.LinuxResources{}}, "empty root with spec"},
+		{&Spec{}, "empty spec"},
+		{&Spec{nil_string, &specs.LinuxResources{}}, "nil root with spec"},
+		{nil, "nil spec"},
 	}
-	err := validateCgroupSpec(&cgroupSpec)
-	assert.Error(t, err, "cgroup spec missing resource specs")
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			control, err := Create(tc.spec)
+			assert.Error(t, err, "Create should return an error")
+			assert.Nil(t, control, "Create call should not return a controller")
+		})
+	}
 }
 
-// TestValidateCgroupSpecWithHappyPath checks the happy path of the validator
-func TestValidateCgroupSpecWithHappyPath(t *testing.T) {
-	cgroupSpec := Spec{
-		Root:  "/ecs/task-id",
-		Specs: &specs.LinuxResources{},
-	}
-	err := validateCgroupSpec(&cgroupSpec)
-	assert.NoError(t, err, "happy path")
+func TestRemoveHappyCase(t *testing.T) {
+	ctrl, testGroup, _ := setupMocks(t)
+	defer ctrl.Finish()
+
+	testGroup.EXPECT().Delete().Times(1)
+	err := Remove("/ecs/foo")
+	assert.NoError(t, err)
 }
 
-// TestCreateWithInvalidSpec checks to create cgroups based off invalid specs
-func TestCreateWithInvalidSpec(t *testing.T) {
-	invalidCgroupSpec := Spec{
-		Root: "/ecs/task-id",
-	}
-	err := Create(&invalidCgroupSpec)
-	assert.Error(t, err, "invalid cgroup spec")
+func TestRemoveLoingErrorCase(t *testing.T) {
+	ctrl, _, mockFactory := setupMocks(t)
+	defer ctrl.Finish()
+
+	mockFactory.group = nil
+	mockFactory.err = errors.New("Unable to load")
+
+	err := Remove("/ecs/foo")
+	assert.Error(t, err)
 }
 
-// TestLoadWithInvalidSpec checks if invalid cgroups can be loaded
-func TestLoadWithInvalidSpec(t *testing.T) {
-	invalidCgroupSpec := Spec{
-		Root: "/ecs/task-id",
-	}
-	_, err := load(&invalidCgroupSpec)
-	assert.Error(t, err, "invalid cgroup spec")
+func TestRemoveErrorCase(t *testing.T) {
+	ctrl, testGroup, _ := setupMocks(t)
+	defer ctrl.Finish()
+
+	testGroup.EXPECT().Delete().Times(1).Return(errors.New("Cgroup error"))
+	err := Remove("/ecs/foo")
+	assert.Error(t, err)
 }
 
-// TestRemoveWithInvalidSpec checks if invalid cgroup specs can be removed
-func TestRemoveWithInvalidSpec(t *testing.T) {
-	invalidCgroupSpec := Spec{
-		Root: "/ecs/task-id",
-	}
-	err := Remove(&invalidCgroupSpec)
-	assert.Error(t, err, "invalid cgroup spec")
+func setupMocks(t *testing.T) (*gomock.Controller, *mock_cgroups.MockCgroup, *mockCgroupFactory) {
+	ctrl := gomock.NewController(t)
+	testGroup := mock_cgroups.NewMockCgroup(ctrl)
+	mockFactory := &mockCgroupFactory{testGroup, nil}
 
+	factory = mockFactory
+	return ctrl, testGroup, mockFactory
+}
+
+type mockCgroupFactory struct {
+	group cgroups.Cgroup
+	err   error
+}
+
+func (f *mockCgroupFactory) New(hierarchy cgroups.Hierarchy, path cgroups.Path, specs *specs.LinuxResources) (cgroups.Cgroup, error) {
+	return f.group, f.err
+}
+
+func (f *mockCgroupFactory) Load(hierarchy cgroups.Hierarchy, path cgroups.Path) (cgroups.Cgroup, error) {
+	return f.group, f.err
 }
