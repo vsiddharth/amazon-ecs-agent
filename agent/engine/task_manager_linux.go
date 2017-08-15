@@ -15,12 +15,6 @@
 
 package engine
 
-import (
-	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
-	"github.com/cihub/seelog"
-	"github.com/pkg/errors"
-)
-
 // SetupPlatformResources sets up platform level resources
 func (mtask *managedTask) SetupPlatformResources() error {
 	if mtask.Task.CgroupEnabled() {
@@ -39,29 +33,12 @@ func (mtask *managedTask) CleanupPlatformResources() error {
 
 // setupCgroup sets up the cgroup for each managed task
 func (mtask *managedTask) setupCgroup() error {
-	// Grab cgroup spec
-	cgroupSpec, err := mtask.Task.GetCgroupSpec()
-	if err != nil {
-		return errors.Wrapf(err, "cgroup setup: unable to obtain cgroup spec")
-	}
-	seelog.Debugf("Setting up task cgroup %s for task %s", cgroupSpec.Root, mtask.Task.Arn)
-
-	// Create cgroup
-	err = cgroup.Create(&cgroupSpec)
-	if err != nil {
-		return errors.Wrapf(err, "cgroup setup: unable to create")
-	}
+	// Stub for now
 	return nil
 }
 
 // cleanupCgroup removes the task cgroup
 func (mtask *managedTask) cleanupCgroup() error {
-	// Grab cgroup spec
-	cgroupSpec, err := mtask.Task.GetCgroupSpec()
-	if err != nil {
-		return errors.Wrapf(err, "cgroup cleanup: unable to obtain cgroup spec")
-	}
-	seelog.Debugf("Cleaning up task cgroup %s for task %s", cgroupSpec.Root, mtask.Task.Arn)
-
-	return cgroup.Remove(&cgroupSpec)
+	// Stub for now
+	return nil
 }

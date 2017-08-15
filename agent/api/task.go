@@ -25,7 +25,6 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/acs/model/ecsacs"
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
 	"github.com/aws/amazon-ecs-agent/agent/engine/emptyvolume"
-	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
 	"github.com/aws/aws-sdk-go/private/protocol/json/jsonutil"
 	"github.com/cihub/seelog"
@@ -111,13 +110,6 @@ type Task struct {
 	// used to look up the credentials for task in the credentials manager
 	credentialsID     string
 	credentialsIDLock sync.RWMutex
-
-	// CgroupSpec attribute to capture the cgroup spec
-	// TODO: Inspect upon model changes
-	CgroupSpec *cgroup.Spec `json:omitempty`
-
-	// cgroupSpecLock to reliably update the cgroup spec
-	cgroupSpecLock sync.RWMutex
 }
 
 // PostUnmarshalTask is run after a task has been unmarshalled, but before it has been
@@ -424,23 +416,6 @@ func (task *Task) dockerHostConfig(container *Container, dockerContainerMap map[
 		PortBindings: dockerPortMap,
 		VolumesFrom:  volumesFrom,
 	}
-	// Update cgroup parent
-	// TODO: Feature gating
-	if task.CgroupEnabled() {
-		// Grab cgroup spec
-		cgroupSpec, err := task.GetCgroupSpec()
-		if err != nil {
-			return nil, &HostConfigError{"Unable to set cgroup parent: " + err.Error()}
-		}
-
-		// Check for empty cgroup root
-		if cgroupSpec.Root == "" {
-			return nil, &HostConfigError{"Unable to set cgroup parent: empty cgroup root"}
-		}
-
-		// Set cgroup parent
-		hostConfig.CgroupParent = cgroupSpec.Root
-	}
 
 	if container.DockerConfig.HostConfig != nil {
 		err := json.Unmarshal([]byte(*container.DockerConfig.HostConfig), hostConfig)
@@ -696,24 +671,4 @@ func (t *Task) String() string {
 		res += fmt.Sprintf("%s (%s->%s),", c.Name, c.GetKnownStatus().String(), c.GetDesiredStatus().String())
 	}
 	return res + "]"
-}
-
-// CgroupEnabled returns a bool when cgroupSpec is available
-func (task *Task) CgroupEnabled() bool {
-	task.cgroupSpecLock.RLock()
-	defer task.cgroupSpecLock.RUnlock()
-
-	return task.CgroupSpec != nil
-}
-
-// GetCgroupSpec fetches the task cgroup spec
-func (task *Task) GetCgroupSpec() (cgroup.Spec, error) {
-	task.cgroupSpecLock.RLock()
-	defer task.cgroupSpecLock.RUnlock()
-
-	if task.CgroupSpec == nil {
-		return cgroup.Spec{}, errors.New("task cgroup: missing spec")
-	}
-
-	return *task.CgroupSpec, nil
 }

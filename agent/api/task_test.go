@@ -22,7 +22,6 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/acs/model/ecsacs"
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
 	"github.com/aws/amazon-ecs-agent/agent/credentials/mocks"
-	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/golang/mock/gomock"
@@ -800,37 +799,4 @@ func assertSetStructFieldsEqual(t *testing.T, expected, actual interface{}) {
 			t.Fatalf("Field %v did not match: %v != %v", reflect.TypeOf(expected).Field(i).Name, expectedVal, actualVal)
 		}
 	}
-}
-
-// TestCgroupEnabledWithMissingSpec checks if task has cgroup
-func TestCgroupEnabledWithMissingSpec(t *testing.T) {
-	task := Task{}
-	status := task.CgroupEnabled()
-	assert.False(t, status, "missing spec")
-}
-
-// TestCgroupEnabledWithSpec checks if task has cgroup spec
-func TestCgroupEnabledWithSpec(t *testing.T) {
-	task := Task{
-		CgroupSpec: &cgroup.Spec{},
-	}
-	status := task.CgroupEnabled()
-	assert.True(t, status)
-}
-
-// TestGetCgroupSpecWithMissingCgroupSpec attempts to retrieve a non-existent cgroup spec
-func TestGetCgroupSpecWithMissingCgroupSpec(t *testing.T) {
-	task := Task{}
-
-	_, err := task.GetCgroupSpec()
-	assert.Error(t, err, "missing cgroup spec")
-}
-
-// TestGetCgroupSpecWithValidCgroupSpec checks if valid cgroup specs can be retrieved
-func TestGetCgroupSpecWithValidCgroupSpec(t *testing.T) {
-	task := Task{
-		CgroupSpec: &cgroup.Spec{},
-	}
-	_, err := task.GetCgroupSpec()
-	assert.NoError(t, err, "success")
 }

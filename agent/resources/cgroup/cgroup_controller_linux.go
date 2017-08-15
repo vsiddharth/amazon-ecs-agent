@@ -18,7 +18,6 @@ package cgroup
 import (
 	"github.com/cihub/seelog"
 	"github.com/containerd/cgroups"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 )
 
@@ -71,21 +70,4 @@ func validateCgroupSpec(cgroupSpec *Spec) error {
 		return errors.New("cgroup spec validator: empty linux resource spec")
 	}
 	return nil
-}
-
-//go:generate go run ../../../scripts/generate/mockgen.go github.com/containerd/cgroups Cgroup mock/cgroups.go
-type CgroupFactory interface {
-	New(hierarchy cgroups.Hierarchy, path cgroups.Path, specs *specs.LinuxResources) (cgroups.Cgroup, error)
-	Load(hierarchy cgroups.Hierarchy, path cgroups.Path) (cgroups.Cgroup, error)
-}
-
-// GlobalCgroupFactory calls the cgroups library global functions
-type GlobalCgroupFactory struct{}
-
-func (c *GlobalCgroupFactory) Load(hierarchy cgroups.Hierarchy, path cgroups.Path) (cgroups.Cgroup, error) {
-	return cgroups.Load(hierarchy, path)
-}
-
-func (c *GlobalCgroupFactory) New(hierarchy cgroups.Hierarchy, path cgroups.Path, specs *specs.LinuxResources) (cgroups.Cgroup, error) {
-	return cgroups.New(hierarchy, path, specs)
 }

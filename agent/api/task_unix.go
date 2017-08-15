@@ -22,3 +22,8 @@ const (
 func (task *Task) adjustForPlatform() {}
 
 func getCanonicalPath(path string) string { return path }
+
+func (task *Task) CgroupEnabled() bool {
+	//stub for now
+	return false
+}

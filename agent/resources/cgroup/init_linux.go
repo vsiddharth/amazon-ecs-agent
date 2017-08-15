@@ -31,5 +31,6 @@ func Init() error {
 		Root:  config.DefaultTaskCgroupPrefix,
 		Specs: &specs.LinuxResources{},
 	}
-	return Create(cgroupSpec)
+	_, err := Create(cgroupSpec)
+	return err
 }
