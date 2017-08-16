@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"errors"
+
 	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup/mock"
 	"github.com/containerd/cgroups"
 	"github.com/golang/mock/gomock"
@@ -85,7 +86,7 @@ func TestRemoveHappyCase(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestRemoveLoingErrorCase(t *testing.T) {
+func TestRemoveDoingErrorCase(t *testing.T) {
 	ctrl, _, mockFactory := setupMocks(t)
 	defer ctrl.Finish()
 
