@@ -1,3 +1,5 @@
+// +build linux
+
 // Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
@@ -27,7 +29,7 @@ type Spec struct {
 	Specs *specs.LinuxResources
 }
 
-//go:generate go run ../../../scripts/generate/mockgen.go github.com/containerd/cgroups Cgroup mock/cgroups.go
+//go:generate go run ../../../scripts/generate/mockgen.go github.com/containerd/cgroups Cgroup mock/mock_cgroups_linux.go
 type CgroupFactory interface {
 	New(hierarchy cgroups.Hierarchy, path cgroups.Path, specs *specs.LinuxResources) (cgroups.Cgroup, error)
 	Load(hierarchy cgroups.Hierarchy, path cgroups.Path) (cgroups.Cgroup, error)
