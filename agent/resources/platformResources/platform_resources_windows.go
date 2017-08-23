@@ -1,4 +1,4 @@
-// +build linux
+// +build !linux
 
 // Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 //
@@ -13,22 +13,23 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package engine
+package platformResources
 
-// SetupPlatformResources sets up platform level resources
-func (mtask *managedTask) SetupPlatformResources() error {
-	if mtask.Task.CgroupEnabled() {
-		// TODO: Update with platformResources
-		return nil
-	}
+import "github.com/aws/amazon-ecs-agent/agent/api"
+
+// platformResources to abstract task platform resources
+type platformResources struct{}
+
+// New returns a new platformResources object
+func New() PlatformResources {
+	return &platformResources{}
+}
+
+// Setup helps setup the platform resources
+func (p *platformResources) Setup(task *api.Task) error {
 	return nil
 }
 
-// CleanupPlatformResources cleans up platform level resources
-func (mtask *managedTask) CleanupPlatformResources() error {
-	if mtask.Task.CgroupEnabled() {
-		// TODO: Update with platformResources
-		return nil
-	}
+func (p *platformResources) Cleanup(task *api.Task) error {
 	return nil
 }
