@@ -1,5 +1,3 @@
-// +build !linux,windows
-
 // Copyright 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
@@ -13,14 +11,24 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package engine
+package oswrapper
 
-// SetupPlatformResources sets up platform level resources
-func (mtask *managedTask) SetupPlatformResources() error {
-	return nil
+import "os"
+
+// OS wraps methods from the stdlib's 'os' package. This is mostly to help with
+// testing where responses from these methods can be mocked
+type OS interface {
+	// Getpid returns the process id of the caller
+	Getpid() int
 }
 
-// CleanupPlatformResources cleans up platform level resources
-func (mtask *managedTask) CleanupPlatformResources() error {
-	return nil
+// New creates a new stdlib OS object
+func New() OS {
+	return &stdlibOS{}
+}
+
+type stdlibOS struct{}
+
+func (*stdlibOS) Getpid() int {
+	return os.Getpid()
 }
