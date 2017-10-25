@@ -202,7 +202,7 @@ func (agent *ecsAgent) doStart(containerChangeEventStream *eventstream.EventStre
 				seelog.Criticalf("Unable to setup '/ecs' cgroup: %v", err)
 				return exitcodes.ExitTerminal
 			}
-			seelog.Warnf("Disabling TaskCPUMemLimit because agent is unabled to setup '/ecs' cgroup: %v", err)
+			seelog.Warnf("Disabling TaskCPUMemLimit because agent is unable to setup '/ecs' cgroup: %v", err)
 			agent.cfg.TaskCPUMemLimit = config.ExplicitlyDisabled
 		}
 	}
