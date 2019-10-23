@@ -174,3 +174,30 @@ func (agent *ecsAgent) appendFirelensConfigCapabilities(capabilities []*ecs.Attr
 func (agent *ecsAgent) appendGMSACapabilities(capabilities []*ecs.Attribute) []*ecs.Attribute {
 	return capabilities
 }
+
+func (agent *ecsAgent) appendTaskENICapabilities(capabilities []*ecs.Attribute) []*ecs.Attribute {
+	if agent.cfg.TaskENIEnabled {
+		// The assumption here is that all of the dependencies for supporting the
+		// Task ENI in the Agent have already been validated prior to the invocation of
+		// the `agent.capabilities()` call
+		capabilities = append(capabilities, &ecs.Attribute{
+			Name: aws.String(attributePrefix + taskENIAttributeSuffix),
+		})
+		taskENIVersionAttribute, err := agent.getTaskENIPluginVersionAttribute()
+		if err != nil {
+			return capabilities
+		}
+		capabilities = append(capabilities, taskENIVersionAttribute)
+
+		// We only care about AWSVPCBlockInstanceMetdata if Task ENI is enabled
+		if agent.cfg.AWSVPCBlockInstanceMetdata {
+			// If the Block Instance Metadata flag is set for AWS VPC networking mode, register a capability
+			// indicating the same
+			capabilities = append(capabilities, &ecs.Attribute{
+				Name: aws.String(attributePrefix + taskENIBlockInstanceMetadataAttributeSuffix),
+			})
+		}
+	}
+
+	return capabilities
+}
