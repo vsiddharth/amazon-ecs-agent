@@ -18,11 +18,14 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
 	asmfactory "github.com/aws/amazon-ecs-agent/agent/asm/factory"
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
+	"github.com/aws/amazon-ecs-agent/agent/ec2"
 	"github.com/aws/amazon-ecs-agent/agent/ecs_client/model/ecs"
 	"github.com/aws/amazon-ecs-agent/agent/engine"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
@@ -41,7 +44,12 @@ const (
 )
 
 func (agent *ecsAgent) initializeTaskENIDependencies(state dockerstate.TaskEngineState, taskEngine engine.TaskEngine) (error, bool) {
-	return errors.New("unsupported platform"), true
+	// Set VPC and Subnet IDs for the instance
+	if err, ok := agent.setVPCSubnet(); err != nil {
+		return err, ok
+	}
+
+	return nil, false
 }
 
 // startWindowsService runs the ECS agent as a Windows Service
@@ -274,4 +282,37 @@ func (agent *ecsAgent) initializeGPUManager() error {
 
 func (agent *ecsAgent) getPlatformDevices() []*ecs.PlatformDevice {
 	return nil
+}
+
+func isInstanceLaunchedInVPC(err error) bool {
+	if metadataErr, ok := err.(*ec2.MetadataError); ok &&
+		metadataErr.GetStatusCode() == http.StatusNotFound {
+		return false
+	}
+
+	return true
+}
+
+func (agent *ecsAgent) setVPCSubnet() (error, bool) {
+	mac, err := agent.ec2MetadataClient.PrimaryENIMAC()
+	if err != nil {
+		return fmt.Errorf("unable to get mac address of instance's primary ENI from instance metadata: %v", err), false
+	}
+
+	vpcID, err := agent.ec2MetadataClient.VPCID(mac)
+	if err != nil {
+		if isInstanceLaunchedInVPC(err) {
+			return fmt.Errorf("unable to get vpc id from instance metadata: %v", err), true
+		}
+		return instanceNotLaunchedInVPCError, false
+	}
+
+	subnetID, err := agent.ec2MetadataClient.SubnetID(mac)
+	if err != nil {
+		return fmt.Errorf("unable to get subnet id from instance metadata: %v", err), false
+	}
+	agent.vpc = vpcID
+	agent.subnet = subnetID
+	agent.mac = mac
+	return nil, false
 }

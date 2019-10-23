@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -543,7 +544,23 @@ func (dg *dockerGoClient) createContainer(ctx context.Context,
 		return DockerContainerMetadata{Error: CannotGetDockerClientError{version: dg.version, err: err}}
 	}
 
-	dockerContainer, err := client.ContainerCreate(ctx, config, hostConfig, &network.NetworkingConfig{}, name)
+	// TODO: Plumb network config across the agent.
+	networkingConfig := network.NetworkingConfig{}
+
+	// TODO: Make this part of agent config.
+	networkOverride := os.Getenv("ECS_DOCKER_NETWORK_OVERRIDE")
+
+	if networkOverride != "" {
+		epConfig := map[string]*network.EndpointSettings{
+			networkOverride: {
+				Aliases: []string{networkOverride},
+			},
+		}
+
+		networkingConfig.EndpointsConfig = epConfig
+	}
+
+	dockerContainer, err := client.ContainerCreate(ctx, config, hostConfig, &networkingConfig, name)
 	if err != nil {
 		return DockerContainerMetadata{Error: CannotCreateContainerError{err}}
 	}

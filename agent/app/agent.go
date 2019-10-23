@@ -514,6 +514,7 @@ func (agent *ecsAgent) registerContainerInstance(
 	}
 
 	seelog.Info("Registering Instance with ECS")
+	seelog.Criticalf("Cap: %v", capabilities)
 	containerInstanceArn, availabilityZone, err := client.RegisterContainerInstance("", capabilities, tags, uuid.New(), platformDevices)
 	if err != nil {
 		seelog.Errorf("Error registering: %v", err)
