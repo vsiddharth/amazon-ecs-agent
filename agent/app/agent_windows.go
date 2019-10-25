@@ -49,6 +49,14 @@ func (agent *ecsAgent) initializeTaskENIDependencies(state dockerstate.TaskEngin
 		return err, ok
 	}
 
+	// TODO: Setup net device watcher (placeholder)
+	if err := agent.startUdevWatcher(state, taskEngine.StateChangeEvents()); err != nil {
+		// If udev watcher was not initialized in this run because of the udev socket
+		// file not being available etc, the Agent might be able to retry and succeed
+		// on the next run. Hence, returning a false here for terminal bool
+		return err, false
+	}
+
 	return nil, false
 }
 
