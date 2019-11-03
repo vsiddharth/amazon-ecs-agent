@@ -305,4 +305,7 @@ type Config struct {
 	// Defaults to false.
 	// see https://docs.aws.amazon.com/AmazonECS/latest/developerguide/container-instance-draining.html
 	SpotInstanceDrainingEnabled bool
+
+	// GMSACapable to indicate if gMSA is supported.
+	GMSACapable bool
 }
