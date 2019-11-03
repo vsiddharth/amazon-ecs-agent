@@ -55,6 +55,7 @@ const (
 	capabilityFirelensLoggingDriver             = "logging-driver.awsfirelens"
 	capabilityFirelensConfigFile                = "firelens.options.config.file"
 	capabilityFirelensConfigS3                  = "firelens.options.config.s3"
+	capabilityGMSA                              = "gMSA"
 )
 
 // capabilities returns the supported capabilities of this agent / docker-client pair.
@@ -98,6 +99,7 @@ const (
 //    com.amazonaws.ecs.capability.logging-driver.awsfirelens
 //    ecs.capability.firelens.options.config.file
 //    ecs.capability.firelens.options.config.s3
+//    ecs.capability.gMSA
 func (agent *ecsAgent) capabilities() ([]*ecs.Attribute, error) {
 	var capabilities []*ecs.Attribute
 
@@ -187,6 +189,10 @@ func (agent *ecsAgent) capabilities() ([]*ecs.Attribute, error) {
 
 	// support external firelens config
 	capabilities = agent.appendFirelensConfigCapabilities(capabilities)
+
+	if agent.cfg.GMSACapable {
+		capabilities = agent.appendGMSACapabilities(capabilities)
+	}
 
 	return capabilities, nil
 }

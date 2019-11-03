@@ -16,6 +16,7 @@ package container
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"strconv"
 	"sync"
 	"time"
@@ -893,6 +894,64 @@ func (c *Container) ShouldCreateWithASMSecret() bool {
 		}
 	}
 	return false
+}
+
+// RequiresCredentialSpec checks if container needs a credential spec resource
+func (c *Container) RequiresCredentialSpec() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	if c.DockerConfig.HostConfig == nil {
+		return false
+	}
+
+	hostConfig := &dockercontainer.HostConfig{}
+	err := json.Unmarshal([]byte(*c.DockerConfig.HostConfig), hostConfig)
+	if err != nil {
+		seelog.Warnf("Encountered error when trying to get hostConfig for container %s: %v", err)
+		return false
+	}
+
+	if len(hostConfig.SecurityOpt) == 0 {
+		return false
+	}
+
+	for _, opt := range hostConfig.SecurityOpt {
+		if strings.HasPrefix(opt, "credentialspec") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetCredentialSpec is used to retrieve the current credential spec resource
+func (c *Container) GetCredentialSpec() string {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	if c.DockerConfig.HostConfig == nil {
+		return ""
+	}
+
+	hostConfig := &dockercontainer.HostConfig{}
+	err := json.Unmarshal([]byte(*c.DockerConfig.HostConfig), hostConfig)
+	if err != nil {
+		seelog.Warnf("Encountered error when trying to get hostConfig for container %s: %v", err)
+		return ""
+	}
+
+	if len(hostConfig.SecurityOpt) == 0 {
+		return ""
+	}
+
+	for _, opt := range hostConfig.SecurityOpt {
+		if strings.HasPrefix(opt, "credentialspec") {
+			return opt
+		}
+	}
+
+	return ""
 }
 
 // MergeEnvironmentVariables appends additional envVarName:envVarValue pairs to

@@ -43,6 +43,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/statechange"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource/credentialspec"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource/firelens"
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 	"github.com/aws/amazon-ecs-agent/agent/utils/retry"
@@ -976,6 +977,37 @@ func (engine *DockerTaskEngine) createContainer(task *apitask.Task, container *a
 
 		if err != nil {
 			return dockerapi.DockerContainerMetadata{Error: apierrors.NamedError(err)}
+		}
+	}
+
+	// Populate credential spec resource
+	if container.RequiresCredentialSpec() {
+		var credSpecResource *credentialspec.CredentialSpecResource
+		resource, ok := task.GetCredentialSpecResource()
+		if !ok {
+			okErr := &apierrors.DockerClientConfigError{Msg: "unable to fetch credential spec resource"}
+			return dockerapi.DockerContainerMetadata{Error: apierrors.NamedError(okErr)}
+		}
+
+		credSpecResource = resource[0].(*credentialspec.CredentialSpecResource)
+
+		containerCredSpec := container.GetCredentialSpec()
+		if containerCredSpec != "" {
+			desiredCredSpecInjection, err := credSpecResource.GetTargetCredSpecMapping(containerCredSpec)
+			if err != nil {
+				missingErr := &apierrors.DockerClientConfigError{Msg: "unable to fetch valid credential spec mapping"}
+				return dockerapi.DockerContainerMetadata{Error: apierrors.NamedError(missingErr)}
+			}
+
+			if len(hostConfig.SecurityOpt) == 0 {
+				hostConfig.SecurityOpt = []string{desiredCredSpecInjection}
+			} else {
+				hostConfig.SecurityOpt = append(hostConfig.SecurityOpt, desiredCredSpecInjection)
+			}
+
+		} else {
+			emptyErr := &apierrors.DockerClientConfigError{Msg: "unable to fetch valid credential spec"}
+			return dockerapi.DockerContainerMetadata{Error: apierrors.NamedError(emptyErr)}
 		}
 	}
 

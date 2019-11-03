@@ -43,6 +43,25 @@ func GetSecretsFromSSM(names []string, client SSMClient) (map[string]string, err
 	return extractSSMValues(out)
 }
 
+func GetParametersFromSSM(names []string, client SSMClient) (map[string]string, error) {
+	var paramNames []*string
+	for _, name := range names {
+		paramNames = append(paramNames, aws.String(name))
+	}
+
+	in := &ssm.GetParametersInput{
+		Names:          paramNames,
+		WithDecryption: aws.Bool(false),
+	}
+
+	out, err := client.GetParameters(in)
+	if err != nil {
+		return nil, err
+	}
+
+	return extractSSMValues(out)
+}
+
 func extractSSMValues(out *ssm.GetParametersOutput) (map[string]string, error) {
 	if out == nil {
 		return nil, errors.New(
