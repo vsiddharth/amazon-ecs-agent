@@ -95,6 +95,8 @@ const (
 	//	 a) Add 'imageDigest' field to 'apicontainer.Container'
 	//	 b) Add 'Region', 'ExecutionCredentialsID', 'ExternalConfigType', 'ExternalConfigValue' and 'NetworkMode' to
 	//     firelens task resource.
+	// 25)
+	//	 a) Add credentialspec task resource.
 
 	ECSDataVersion = 24
 

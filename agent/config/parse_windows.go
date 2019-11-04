@@ -23,9 +23,12 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 )
 
+// parseGMSACapability is used to determine if gMSA support can be enabled
 func parseGMSACapability() bool {
 	envStatus := utils.ParseBool(os.Getenv("ECS_GMSA_SUPPORTED"), true)
 	if envStatus {
+		// If gMSA feature is explicitly enabled, check if container instance is domain joined.
+		// If container instance is not domain joined, explicitly disable feature configuration.
 		status, err := isDomainJoined()
 		if err != nil || status != true {
 			return false
@@ -35,6 +38,8 @@ func parseGMSACapability() bool {
 	return true
 }
 
+// isDomainJoined is used to validate if container instance is part of a valid active directory.
+// Reference: https://golang.org/src/os/user/lookup_windows.go
 func isDomainJoined() (bool, error) {
 	var domain *uint16
 	var status uint32

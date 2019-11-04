@@ -1,3 +1,5 @@
+// +build windows
+
 // Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License"). You may
@@ -51,30 +53,11 @@ const (
 )
 
 var (
-	// resourceDir will be populated by environment variables
-	resourceDir = ""
+	// CredentialSpecResourceDir will be populated by environment variables
+	CredentialSpecResourceDir = ""
 )
 
-func init() {
-	// TODO: Use registry
-	// This should always be available on Windows instances
-	appDataDir := os.Getenv("APPDATA")
-	if appDataDir != "" {
-		resourceDir = appDataDir
-	} else {
-		tempDir := os.Getenv("TEMP")
-		if tempDir != "" {
-			resourceDir = tempDir
-		}
-	}
-
-	if resourceDir == "" {
-		seelog.Critical("Unable to obtain valid credentialspec resource dir")
-		os.Exit(1)
-	}
-}
-
-// CredentialSpecResource is the abstraction for credential spec resources
+// CredentialSpecResource is the abstraction for credentialspec resources
 type CredentialSpecResource struct {
 	taskARN string
 	region  string
@@ -108,9 +91,15 @@ type CredentialSpecResource struct {
 	// needed mostly for testing.
 	s3ClientCreator s3factory.S3ClientCreator
 
-	// required for processing credential specs, key is input credential spec
+	// required for processing credentialspecs, key is input credentialspec
+	// Example key := credentialspec:file://credentialspec.json
 	requiredCredentialSpecs map[string][]*apicontainer.Container
-	// map to transform credential spec values, key is a input credential spec
+
+	// map to transform credentialspec values, key is a input credentialspec
+	// Examples:
+	// * key := credentialspec:file://credentialspec.json, value := credentialspec=file://credentialspec.json
+	// * key := credentialspec:s3ARN, value := credentialspec=file://CredentialSpecResourceDir/s3_taskARN_fileName.json
+	// * key := credentialspec:ssmARN, value := credentialspec=file://CredentialSpecResourceDir/ssm_taskARN_param.json
 	credSpecMap map[string]string
 
 	// lock is used for fields that are accessed and updated concurrently
@@ -133,6 +122,7 @@ func NewCredentialSpecResource(taskARN, region string,
 		executionCredentialsID:  executionCredentialsID,
 		ssmClientCreator:        ssmClientCreator,
 		s3ClientCreator:         s3ClientCreator,
+		credSpecMap:             make(map[string]string),
 	}
 
 	s.initStatusToTransition()
@@ -170,7 +160,7 @@ func (cs *CredentialSpecResource) GetTerminalReason() string {
 
 func (cs *CredentialSpecResource) setTerminalReason(reason string) {
 	cs.terminalReasonOnce.Do(func() {
-		seelog.Infof("credential spec resource: setting terminal reason for credential spec resource in task: [%s]", cs.taskARN)
+		seelog.Infof("credentialspec resource: setting terminal reason for credentialspec resource in task: [%s]", cs.taskARN)
 		cs.terminalReason = reason
 	})
 }
@@ -325,13 +315,13 @@ func (cs *CredentialSpecResource) GetName() string {
 	return ResourceName
 }
 
-// Create is used to create all the credential spec resources for a given task
+// Create is used to create all the credentialspec resources for a given task
 func (cs *CredentialSpecResource) Create() error {
 	// To fail fast, check execution role first
 	executionCredentials, ok := cs.credentialsManager.GetTaskCredentials(cs.getExecutionCredentialsID())
 	if !ok {
 		// No need to log here. managedTask.applyResourceState already does that
-		err := errors.New("credential spec resource: unable to find execution role credentials")
+		err := errors.New("credentialspec resource: unable to find execution role credentials")
 		cs.setTerminalReason(err.Error())
 		return err
 	}
@@ -350,6 +340,7 @@ func (cs *CredentialSpecResource) Create() error {
 
 		parsedARN, err := arn.Parse(credSpecValue)
 		if err != nil {
+			cs.setTerminalReason(err.Error())
 			return err
 		}
 
@@ -360,21 +351,24 @@ func (cs *CredentialSpecResource) Create() error {
 
 			bucket, key, err := s3.ParseS3ARN(s3CredSpecValue)
 			if err != nil {
+				cs.setTerminalReason(err.Error())
 				return err
 			}
 
 			s3Client, err := cs.s3ClientCreator.NewS3ClientForBucket(bucket, cs.region, iamCredentials)
 			if err != nil {
+				cs.setTerminalReason(err.Error())
 				return errors.Wrapf(err, "unable to initialize s3 client for bucket %s", bucket)
 			}
 
 			resourceBase := filepath.Base(s3ResourceARN.Resource)
-			localCredSpecFilePath := fmt.Sprintf("%s/s3_%s_%s.json", resourceDir, cs.taskARN, resourceBase)
+			localCredSpecFilePath := fmt.Sprintf("%s/s3_%s_%s.json", CredentialSpecResourceDir, cs.taskARN, resourceBase)
 
 			err = cs.writeS3File(func(file oswrapper.File) error {
 				return s3.DownloadFile(bucket, key, s3DownloadTimeout, file, s3Client)
 			}, localCredSpecFilePath)
 			if err != nil {
+				cs.setTerminalReason(err.Error())
 				return errors.Wrapf(err, "unable to download s3 file %s from bucket %s", key, bucket)
 			}
 
@@ -391,15 +385,17 @@ func (cs *CredentialSpecResource) Create() error {
 
 			ssmParamMap, err := ssm.GetParametersFromSSM(ssmParams, ssmClient)
 			if err != nil {
+				cs.setTerminalReason(err.Error())
 				return err
 			}
 
 			ssmParamData := ssmParamMap[ssmParam]
 
-			localCredSpecFilePath := fmt.Sprintf("%s/ssm_%s_%s.json", resourceDir, cs.taskARN, ssmParam)
+			localCredSpecFilePath := fmt.Sprintf("%s/ssm_%s_%s.json", CredentialSpecResourceDir, cs.taskARN, ssmParam)
 
 			err = cs.writeSSMFile(ssmParamData, localCredSpecFilePath)
 			if err != nil {
+				cs.setTerminalReason(err.Error())
 				return err
 			}
 
@@ -407,7 +403,9 @@ func (cs *CredentialSpecResource) Create() error {
 			cs.updateCredSpecMapping(credSpecValue, dockerHostconfigSecOptCredSpec)
 
 		} else {
-			return errors.New("unsupported credential spec ARN dependency")
+			err := errors.New("unsupported credentialspec ARN dependency, only s3/ssm ARNs are valid")
+			cs.setTerminalReason(err.Error())
+			return err
 		}
 	}
 
@@ -415,7 +413,7 @@ func (cs *CredentialSpecResource) Create() error {
 }
 
 func (cs *CredentialSpecResource) writeS3File(writeFunc func(file oswrapper.File) error, filePath string) error {
-	temp, err := cs.ioutil.TempFile(resourceDir, tempFileName)
+	temp, err := cs.ioutil.TempFile(CredentialSpecResourceDir, tempFileName)
 	if err != nil {
 		return err
 	}
@@ -456,7 +454,7 @@ func (cs *CredentialSpecResource) getCredSpecMap() map[string]string {
 	return cs.credSpecMap
 }
 
-func (cs *CredentialSpecResource) GetTargetCredSpecMapping(credSpecInput string) (string, error) {
+func (cs *CredentialSpecResource) GetTargetMapping(credSpecInput string) (string, error) {
 	cs.lock.RLock()
 	defer cs.lock.RUnlock()
 
@@ -475,13 +473,13 @@ func (cs *CredentialSpecResource) updateCredSpecMapping(credSpecInput, targetCre
 	cs.credSpecMap[credSpecInput] = targetCredSpec
 }
 
-// Cleanup removes the credential spec created for the task
+// Cleanup removes the credentialspec created for the task
 func (cs *CredentialSpecResource) Cleanup() error {
 	cs.clearCredentialSpec()
 	return nil
 }
 
-// clearCredentialSpec cycles through the collection of credential spec data and
+// clearCredentialSpec cycles through the collection of credentialspec data and
 // removes them from the task
 func (cs *CredentialSpecResource) clearCredentialSpec() {
 	cs.lock.Lock()
@@ -493,7 +491,7 @@ func (cs *CredentialSpecResource) clearCredentialSpec() {
 	}
 }
 
-// CredentialSpecResourceJSON is the json representation of the credential spec resource
+// CredentialSpecResourceJSON is the json representation of the credentialspec resource
 type CredentialSpecResourceJSON struct {
 	TaskARN                 string                               `json:"taskARN"`
 	CreatedAt               *time.Time                           `json:"createdAt,omitempty"`
@@ -507,7 +505,7 @@ type CredentialSpecResourceJSON struct {
 // MarshalJSON serialises the CredentialSpecResourceJSON struct to JSON
 func (cs *CredentialSpecResource) MarshalJSON() ([]byte, error) {
 	if cs == nil {
-		return nil, errors.New("credential spec resource is nil")
+		return nil, errors.New("credential specresource is nil")
 	}
 	createdAt := cs.GetCreatedAt()
 	return json.Marshal(CredentialSpecResourceJSON{
@@ -524,7 +522,7 @@ func (cs *CredentialSpecResource) MarshalJSON() ([]byte, error) {
 			return &s
 		}(),
 		RequiredCredentialSpecs: cs.getRequiredCredentialSpecs(),
-		CredSpecMap: cs.getCredSpecMap(),
+		CredSpecMap:             cs.getCredSpecMap(),
 		ExecutionCredentialsID:  cs.getExecutionCredentialsID(),
 	})
 }

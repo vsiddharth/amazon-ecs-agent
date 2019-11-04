@@ -43,6 +43,9 @@ func GetSecretsFromSSM(names []string, client SSMClient) (map[string]string, err
 	return extractSSMValues(out)
 }
 
+// TODO: Refactor GetSecretsFromSSM to parameterize `WithDecryption`
+// GetParametersFromSSM makes the api call to the AWS SSM parameter store to
+// retrieve parameter value in batches
 func GetParametersFromSSM(names []string, client SSMClient) (map[string]string, error) {
 	var paramNames []*string
 	for _, name := range names {

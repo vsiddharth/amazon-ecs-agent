@@ -47,6 +47,7 @@ func (agent *ecsAgent) initializeTaskENIDependencies(state dockerstate.TaskEngin
 
 // startWindowsService runs the ECS agent as a Windows Service
 func (agent *ecsAgent) startWindowsService() int {
+	setupCredentialSpecResourceDir()
 	svc.Run(EcsSvcName, newHandler(agent))
 	return 0
 }
@@ -276,4 +277,23 @@ func (agent *ecsAgent) initializeGPUManager() error {
 
 func (agent *ecsAgent) getPlatformDevices() []*ecs.PlatformDevice {
 	return nil
+}
+
+func setupCredentialSpecResourceDir() {
+	// TODO: Use registry
+	// This should always be available on Windows instances
+	appDataDir := os.Getenv("APPDATA")
+	if appDataDir != "" {
+		credentialspec.CredentialSpecResourceDir = appDataDir
+	} else {
+		tempDir := os.Getenv("TEMP")
+		if tempDir != "" {
+			credentialspec.CredentialSpecResourceDir = tempDir
+		}
+	}
+
+	if credentialspec.CredentialSpecResourceDir == "" {
+		seelog.Critical("Unable to obtain valid credentialspec resource dir")
+		os.Exit(1)
+	}
 }

@@ -980,25 +980,29 @@ func (engine *DockerTaskEngine) createContainer(task *apitask.Task, container *a
 		}
 	}
 
-	// Populate credential spec resource
+	// Populate credentialspec resource
 	if container.RequiresCredentialSpec() {
+		seelog.Infof("Obtained container %s with credentialspec resource requirement.", container.Name)
 		var credSpecResource *credentialspec.CredentialSpecResource
 		resource, ok := task.GetCredentialSpecResource()
 		if !ok {
-			okErr := &apierrors.DockerClientConfigError{Msg: "unable to fetch credential spec resource"}
+			okErr := &apierrors.DockerClientConfigError{Msg: "unable to fetch task credentialspec resource"}
 			return dockerapi.DockerContainerMetadata{Error: apierrors.NamedError(okErr)}
 		}
 
+		// Setup credentialSpec resource object for injection
 		credSpecResource = resource[0].(*credentialspec.CredentialSpecResource)
 
-		containerCredSpec := container.GetCredentialSpec()
-		if containerCredSpec != "" {
-			desiredCredSpecInjection, err := credSpecResource.GetTargetCredSpecMapping(containerCredSpec)
-			if err != nil {
-				missingErr := &apierrors.DockerClientConfigError{Msg: "unable to fetch valid credential spec mapping"}
+		containerCredSpec, err := container.GetCredentialSpec()
+		if err != nil && containerCredSpec != "" {
+			desiredCredSpecInjection, err := credSpecResource.GetTargetMapping(containerCredSpec)
+			if err != nil || desiredCredSpecInjection == ""{
+				missingErr := &apierrors.DockerClientConfigError{Msg: "unable to fetch valid credentialspec mapping"}
 				return dockerapi.DockerContainerMetadata{Error: apierrors.NamedError(missingErr)}
 			}
 
+			// Inject containers' hostConfig.SecurityOpt with the credentialspec resource
+			seelog.Infof("Injecting container %s with credentialspec %s.", container.Name, desiredCredSpecInjection)
 			if len(hostConfig.SecurityOpt) == 0 {
 				hostConfig.SecurityOpt = []string{desiredCredSpecInjection}
 			} else {
@@ -1006,7 +1010,7 @@ func (engine *DockerTaskEngine) createContainer(task *apitask.Task, container *a
 			}
 
 		} else {
-			emptyErr := &apierrors.DockerClientConfigError{Msg: "unable to fetch valid credential spec"}
+			emptyErr := &apierrors.DockerClientConfigError{Msg: "unable to fetch valid credentialspec"}
 			return dockerapi.DockerContainerMetadata{Error: apierrors.NamedError(emptyErr)}
 		}
 	}

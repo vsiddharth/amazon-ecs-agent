@@ -701,7 +701,7 @@ func (task *Task) requiresSSMSecret() bool {
 }
 
 // requiresCredentialSpecResource returns true if at least one container in the task
-// needs a valid credential spec resource
+// needs a valid credentialspec resource
 func (task *Task) requiresCredentialSpecResource() bool {
 	for _, container := range task.Containers {
 		if container.RequiresCredentialSpec() {
@@ -791,8 +791,8 @@ func (task *Task) getAllCredentialSpecRequirements() map[string][]*apicontainer.
 
 	for _, container := range task.Containers {
 		if container.RequiresCredentialSpec() {
-			credentialSpec := container.GetCredentialSpec()
-			if credentialSpec != "" {
+			credentialSpec, err := container.GetCredentialSpec()
+			if err != nil && credentialSpec != "" {
 				reqs[credentialSpec] = append(reqs[credentialSpec], container)
 			}
 		}

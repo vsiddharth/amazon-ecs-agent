@@ -40,7 +40,7 @@ const (
 	ASMSecretKey = asmsecretres.ResourceName
 	// FirelensKey is the string used in resources map to represent firelens resource
 	FirelensKey = firelens.ResourceName
-
+	// CredentialSpecKey is the string used in resources map to represent credentialspec resource
 	CredentialSpecKey = credentialspec.ResourceName
 )
 
