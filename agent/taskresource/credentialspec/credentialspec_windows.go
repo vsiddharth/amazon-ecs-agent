@@ -74,6 +74,9 @@ type CredentialSpecResource struct {
 	// needed mostly for testing.
 	s3ClientCreator s3factory.S3ClientCreator
 
+	// credentialSpecResourceLocation is the location where all the tasks' credentialspec artifacts
+	credentialSpecResourceLocation string
+
 	// required for processing credentialspecs, key is input credentialspec
 	// Example key := credentialspec:file://credentialspec.json
 	requiredCredentialSpecs map[string][]*apicontainer.Container
@@ -81,8 +84,8 @@ type CredentialSpecResource struct {
 	// map to transform credentialspec values, key is a input credentialspec
 	// Examples:
 	// * key := credentialspec:file://credentialspec.json, value := credentialspec=file://credentialspec.json
-	// * key := credentialspec:s3ARN, value := credentialspec=file://CredentialSpecResourceDir/s3_taskARN_fileName.json
-	// * key := credentialspec:ssmARN, value := credentialspec=file://CredentialSpecResourceDir/ssm_taskARN_param.json
+	// * key := credentialspec:s3ARN, value := credentialspec=file://CredentialSpecResourceLocation/s3_taskARN_fileName.json
+	// * key := credentialspec:ssmARN, value := credentialspec=file://CredentialSpecResourceLocation/ssm_taskARN_param.json
 	credSpecMap map[string]string
 
 	// lock is used for fields that are accessed and updated concurrently
@@ -95,7 +98,7 @@ func NewCredentialSpecResource(taskARN, region string,
 	executionCredentialsID string,
 	credentialsManager credentials.Manager,
 	ssmClientCreator ssmfactory.SSMClientCreator,
-	s3ClientCreator s3factory.S3ClientCreator) *CredentialSpecResource {
+	s3ClientCreator s3factory.S3ClientCreator) (*CredentialSpecResource, error) {
 
 	s := &CredentialSpecResource{
 		taskARN:                 taskARN,
@@ -108,8 +111,13 @@ func NewCredentialSpecResource(taskARN, region string,
 		credSpecMap:             make(map[string]string),
 	}
 
+	err := s.setCredentialSpecResourceLocation()
+	if err != nil {
+		return nil, err
+	}
+
 	s.initStatusToTransition()
-	return s
+	return s, nil
 }
 
 func (cs *CredentialSpecResource) initStatusToTransition() {
@@ -125,6 +133,7 @@ func (cs *CredentialSpecResource) Initialize(resourceFields *taskresource.Resour
 	cs.initStatusToTransition()
 	cs.credentialsManager = resourceFields.CredentialsManager
 	cs.ssmClientCreator = resourceFields.SSMClientCreator
+	cs.s3ClientCreator = resourceFields.S3ClientCreator
 
 	// if task hasn't turn to 'created' status, and it's desire status is 'running'
 	// the resource status needs to be reset to 'NONE' status so the cs value
@@ -321,10 +330,7 @@ func (cs *CredentialSpecResource) Create() error {
 		credSpecValue := credSpecSplit[1]
 
 		if strings.HasPrefix(credSpecValue, "file://") {
-			dockerHostconfigSecOptCredSpec := strings.Replace(credSpecStr, "credentialspec:", "credentialspec=", 1)
-			cs.updateCredSpecMapping(credSpecStr, dockerHostconfigSecOptCredSpec)
-
-			return nil
+			return cs.handleCredentialspecFile(credSpecStr)
 		}
 
 		parsedARN, err := arn.Parse(credSpecValue)
@@ -335,64 +341,11 @@ func (cs *CredentialSpecResource) Create() error {
 
 		parsedARNService := parsedARN.Service
 		if parsedARNService == "s3" {
-			s3ResourceARN := parsedARN
-			s3CredSpecValue := credSpecValue
-
-			bucket, key, err := s3.ParseS3ARN(s3CredSpecValue)
-			if err != nil {
-				cs.setTerminalReason(err.Error())
-				return err
-			}
-
-			s3Client, err := cs.s3ClientCreator.NewS3ClientForBucket(bucket, cs.region, iamCredentials)
-			if err != nil {
-				cs.setTerminalReason(err.Error())
-				return errors.Wrapf(err, "unable to initialize s3 client for bucket %s", bucket)
-			}
-
-			resourceBase := filepath.Base(s3ResourceARN.Resource)
-			localCredSpecFilePath := fmt.Sprintf("%s/s3_%s_%s.json", CredentialSpecResourceDir, cs.taskARN, resourceBase)
-
-			err = cs.writeS3File(func(file oswrapper.File) error {
-				return s3.DownloadFile(bucket, key, s3DownloadTimeout, file, s3Client)
-			}, localCredSpecFilePath)
-			if err != nil {
-				cs.setTerminalReason(err.Error())
-				return errors.Wrapf(err, "unable to download s3 file %s from bucket %s", key, bucket)
-			}
-
-			dockerHostconfigSecOptCredSpec := fmt.Sprintf("credentialspec=file://%s", localCredSpecFilePath)
-			cs.updateCredSpecMapping(credSpecValue, dockerHostconfigSecOptCredSpec)
-
+			return cs.handleS3CredentialspecFile(credSpecStr, credSpecValue, iamCredentials)
 		} else if parsedARNService == "ssm" {
-			ssmResourceARN := parsedARN
-
-			ssmClient := cs.ssmClientCreator.NewSSMClient(cs.region, iamCredentials)
-
-			ssmParam := filepath.Base(ssmResourceARN.Resource)
-			ssmParams := []string{ssmParam}
-
-			ssmParamMap, err := ssm.GetParametersFromSSM(ssmParams, ssmClient)
-			if err != nil {
-				cs.setTerminalReason(err.Error())
-				return err
-			}
-
-			ssmParamData := ssmParamMap[ssmParam]
-
-			localCredSpecFilePath := fmt.Sprintf("%s/ssm_%s_%s.json", CredentialSpecResourceDir, cs.taskARN, ssmParam)
-
-			err = cs.writeSSMFile(ssmParamData, localCredSpecFilePath)
-			if err != nil {
-				cs.setTerminalReason(err.Error())
-				return err
-			}
-
-			dockerHostconfigSecOptCredSpec := fmt.Sprintf("credentialspec=file://%s", localCredSpecFilePath)
-			cs.updateCredSpecMapping(credSpecValue, dockerHostconfigSecOptCredSpec)
-
+			return cs.handleSSMCredentialspecFile(credSpecStr, credSpecValue, iamCredentials)
 		} else {
-			err := errors.New("unsupported credentialspec ARN dependency, only s3/ssm ARNs are valid")
+			err := errors.New("unsupported credentialspec ARN, only s3/ssm ARNs are valid")
 			cs.setTerminalReason(err.Error())
 			return err
 		}
@@ -401,8 +354,92 @@ func (cs *CredentialSpecResource) Create() error {
 	return nil
 }
 
+func (cs *CredentialSpecResource) handleCredentialspecFile(credentialspec string) error {
+	credSpecSplit := strings.SplitAfterN(credentialspec, "credentialspec:", 2)
+	credSpecFile := credSpecSplit[1]
+
+	if !strings.HasPrefix(credSpecFile, "file://") {
+		return errors.New("invalid credentialspec file specification")
+	}
+
+	dockerHostconfigSecOptCredSpec := strings.Replace(credentialspec, "credentialspec:", "credentialspec=", 1)
+	cs.updateCredSpecMapping(credentialspec, dockerHostconfigSecOptCredSpec)
+
+	return nil
+}
+
+func (cs *CredentialSpecResource) handleS3CredentialspecFile(originalCredentialspec, credentialspecS3ARN string, iamCredentials credentials.IAMRoleCredentials) error {
+	parsedARN, err := arn.Parse(credentialspecS3ARN)
+	if err != nil {
+		cs.setTerminalReason(err.Error())
+		return err
+	}
+
+	bucket, key, err := s3.ParseS3ARN(credentialspecS3ARN)
+	if err != nil {
+		cs.setTerminalReason(err.Error())
+		return err
+	}
+
+	s3Client, err := cs.s3ClientCreator.NewS3ClientForBucket(bucket, cs.region, iamCredentials)
+	if err != nil {
+		cs.setTerminalReason(err.Error())
+		return err
+	}
+
+	resourceBase := filepath.Base(parsedARN.Resource)
+	localCredSpecFilePath := fmt.Sprintf("%s/s3_%s_%s.json", cs.credentialSpecResourceLocation, cs.taskARN, resourceBase)
+
+	err = cs.writeS3File(func(file oswrapper.File) error {
+		return s3.DownloadFile(bucket, key, s3DownloadTimeout, file, s3Client)
+	}, localCredSpecFilePath)
+	if err != nil {
+		cs.setTerminalReason(err.Error())
+		return err
+	}
+
+	dockerHostconfigSecOptCredSpec := fmt.Sprintf("credentialspec=file://%s", localCredSpecFilePath)
+	cs.updateCredSpecMapping(originalCredentialspec, dockerHostconfigSecOptCredSpec)
+
+	return nil
+}
+
+func (cs *CredentialSpecResource) handleSSMCredentialspecFile(originalCredentialspec, credentialspecSSMARN string, iamCredentials credentials.IAMRoleCredentials) error {
+	parsedARN, err := arn.Parse(credentialspecSSMARN)
+	if err != nil {
+		cs.setTerminalReason(err.Error())
+		return err
+	}
+
+	ssmClient := cs.ssmClientCreator.NewSSMClient(cs.region, iamCredentials)
+
+	ssmParam := filepath.Base(parsedARN.Resource)
+	ssmParams := []string{ssmParam}
+
+	ssmParamMap, err := ssm.GetParametersFromSSM(ssmParams, ssmClient)
+	if err != nil {
+		cs.setTerminalReason(err.Error())
+		return err
+	}
+
+	ssmParamData := ssmParamMap[ssmParam]
+
+	localCredSpecFilePath := fmt.Sprintf("%s/ssm_%s_%s.json", cs.credentialSpecResourceLocation, cs.taskARN, ssmParam)
+
+	err = cs.writeSSMFile(ssmParamData, localCredSpecFilePath)
+	if err != nil {
+		cs.setTerminalReason(err.Error())
+		return err
+	}
+
+	dockerHostconfigSecOptCredSpec := fmt.Sprintf("credentialspec=file://%s", localCredSpecFilePath)
+	cs.updateCredSpecMapping(originalCredentialspec, dockerHostconfigSecOptCredSpec)
+
+	return nil
+}
+
 func (cs *CredentialSpecResource) writeS3File(writeFunc func(file oswrapper.File) error, filePath string) error {
-	temp, err := cs.ioutil.TempFile(CredentialSpecResourceDir, tempFileName)
+	temp, err := cs.ioutil.TempFile(cs.credentialSpecResourceLocation, tempFileName)
 	if err != nil {
 		return err
 	}
@@ -475,7 +512,7 @@ func (cs *CredentialSpecResource) clearCredentialSpec() {
 	defer cs.lock.Unlock()
 
 	for key := range cs.credSpecMap {
-		// TODO: Cleanup file on container instance
+		// TODO: Cleanup file on container instance (optional)
 		delete(cs.credSpecMap, key)
 	}
 }
@@ -538,6 +575,26 @@ func (cs *CredentialSpecResource) UnmarshalJSON(b []byte) error {
 	}
 	cs.taskARN = temp.TaskARN
 	cs.executionCredentialsID = temp.ExecutionCredentialsID
+
+	return nil
+}
+
+func (cs *CredentialSpecResource) setCredentialSpecResourceLocation() error {
+	// TODO: Use registry
+	// This should always be available on Windows instances
+	appDataDir := os.Getenv("APPDATA")
+	if appDataDir != "" {
+		cs.credentialSpecResourceLocation = appDataDir
+	} else {
+		tempDir := os.Getenv("TEMP")
+		if tempDir != "" {
+			cs.credentialSpecResourceLocation = tempDir
+		}
+	}
+
+	if cs.credentialSpecResourceLocation == "" {
+		return errors.New("credentialspec resource location not available")
+	}
 
 	return nil
 }

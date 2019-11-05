@@ -169,9 +169,13 @@ func (task *Task) requiresCredentialSpecResource() bool {
 
 // initializeCredentialSpecResource builds the resource dependency map for the credentialspec resource
 func (task *Task) initializeCredentialSpecResource(config *config.Config, credentialsManager credentials.Manager,
-	resourceFields *taskresource.ResourceFields) {
-	credentialspecResource := credentialspec.NewCredentialSpecResource(task.Arn, config.AWSRegion, task.getAllCredentialSpecRequirements(),
+	resourceFields *taskresource.ResourceFields) error {
+	credentialspecResource, err := credentialspec.NewCredentialSpecResource(task.Arn, config.AWSRegion, task.getAllCredentialSpecRequirements(),
 		task.ExecutionCredentialsID, credentialsManager, resourceFields.SSMClientCreator, resourceFields.S3ClientCreator)
+	if err != nil {
+		return err
+	}
+
 	task.AddResource(credentialspec.ResourceName, credentialspecResource)
 
 	// for every container that needs credential spec vending, it needs to wait for all credential spec resources
@@ -182,6 +186,8 @@ func (task *Task) initializeCredentialSpecResource(config *config.Config, creden
 				apicontainerstatus.ContainerCreated)
 		}
 	}
+
+	return nil
 }
 
 // getAllCredentialSpecRequirements is used to build all the credential spec requirements for the task

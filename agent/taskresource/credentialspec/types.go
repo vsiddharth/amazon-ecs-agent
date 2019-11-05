@@ -26,8 +26,3 @@ const (
 
 	s3DownloadTimeout = 30 * time.Second
 )
-
-var (
-	// CredentialSpecResourceDir will be populated by environment variables
-	CredentialSpecResourceDir = ""
-)
