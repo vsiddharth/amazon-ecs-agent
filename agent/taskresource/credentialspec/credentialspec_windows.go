@@ -193,11 +193,17 @@ func (cs *CredentialSpecResource) NextKnownState() resourcestatus.ResourceStatus
 
 // ApplyTransition calls the function required to move to the specified status
 func (cs *CredentialSpecResource) ApplyTransition(nextState resourcestatus.ResourceStatus) error {
+	cs.lock.Lock()
+	defer cs.lock.Unlock()
+
 	transitionFunc, ok := cs.resourceStatusToTransitionFunction[nextState]
 	if !ok {
-		return errors.Errorf("resource [%s]: transition to %s impossible", cs.GetName(),
+		err := errors.Errorf("resource [%s]: transition to %s impossible", cs.GetName(),
 			cs.StatusString(nextState))
+		cs.setTerminalReason(err.Error())
+		return err
 	}
+
 	return transitionFunc()
 }
 
