@@ -444,3 +444,15 @@ func TestInitializeAndGetCredentialSpecResource(t *testing.T) {
 	_, ok := task.GetCredentialSpecResource()
 	assert.True(t, ok)
 }
+
+func TestGetCredentialSpecResource(t *testing.T) {
+	credentialspecResource := &credentialspec.CredentialSpecResource{}
+	task := &Task{
+		ResourcesMapUnsafe: make(map[string][]taskresource.TaskResource),
+	}
+	task.AddResource(credentialspec.ResourceName, credentialspecResource)
+
+	credentialspecTaskResource, ok := task.GetCredentialSpecResource()
+	assert.True(t, ok)
+	assert.NotEmpty(t, credentialspecTaskResource)
+}

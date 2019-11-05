@@ -16,10 +16,7 @@
 package container
 
 import (
-	"encoding/json"
-	"github.com/cihub/seelog"
 	"github.com/pkg/errors"
-	"strings"
 )
 
 const (

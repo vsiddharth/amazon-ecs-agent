@@ -30,19 +30,18 @@ import (
 	apieni "github.com/aws/amazon-ecs-agent/agent/api/eni"
 	apitaskstatus "github.com/aws/amazon-ecs-agent/agent/api/task/status"
 	"github.com/aws/amazon-ecs-agent/agent/asm"
-	"github.com/aws/amazon-ecs-agent/agent/asm/factory/mocks"
-	"github.com/aws/amazon-ecs-agent/agent/asm/mocks"
+	mock_factory "github.com/aws/amazon-ecs-agent/agent/asm/factory/mocks"
+	mock_secretsmanageriface "github.com/aws/amazon-ecs-agent/agent/asm/mocks"
 	"github.com/aws/amazon-ecs-agent/agent/config"
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
-	"github.com/aws/amazon-ecs-agent/agent/credentials/mocks"
+	mock_credentials "github.com/aws/amazon-ecs-agent/agent/credentials/mocks"
 	"github.com/aws/amazon-ecs-agent/agent/dockerclient"
 	"github.com/aws/amazon-ecs-agent/agent/dockerclient/dockerapi"
-	"github.com/aws/amazon-ecs-agent/agent/dockerclient/dockerapi/mocks"
+	mock_dockerapi "github.com/aws/amazon-ecs-agent/agent/dockerclient/dockerapi/mocks"
 	"github.com/aws/amazon-ecs-agent/agent/ecscni"
 	mock_ssm_factory "github.com/aws/amazon-ecs-agent/agent/ssm/factory/mocks"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource/asmauth"
-	"github.com/aws/amazon-ecs-agent/agent/taskresource/credentialspec"
 	resourcestatus "github.com/aws/amazon-ecs-agent/agent/taskresource/status"
 	taskresourcevolume "github.com/aws/amazon-ecs-agent/agent/taskresource/volume"
 	"github.com/aws/amazon-ecs-agent/agent/utils"
@@ -2701,19 +2700,6 @@ func TestPopulateSecretsAsEnvOnlySSM(t *testing.T) {
 	assert.Equal(t, "secretValue3", container.Environment["secret3"])
 	assert.Equal(t, 1, len(container.Environment))
 }
-
-func TestGetCredentialSpecResource(t *testing.T) {
-	credentialspecResource := &credentialspec.CredentialSpecResource{}
-	task := &Task{
-		ResourcesMapUnsafe: make(map[string][]taskresource.TaskResource),
-	}
-	task.AddResource(credentialspec.ResourceName, credentialspecResource)
-
-	credentialspecTaskResource, ok := task.GetCredentialSpecResource()
-	assert.True(t, ok)
-	assert.NotEmpty(t, credentialspecTaskResource)
-}
-
 
 func TestAddGPUResource(t *testing.T) {
 	container := &apicontainer.Container{
