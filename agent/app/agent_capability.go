@@ -55,6 +55,7 @@ const (
 	capabilityFirelensLoggingDriver             = "logging-driver.awsfirelens"
 	capabilityFirelensConfigFile                = "firelens.options.config.file"
 	capabilityFirelensConfigS3                  = "firelens.options.config.s3"
+	capabilityFullTaskSync                      = "full-sync"
 	capabilityGMSA                              = "gMSA"
 )
 
