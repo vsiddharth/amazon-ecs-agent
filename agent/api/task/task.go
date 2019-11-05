@@ -45,6 +45,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource/asmauth"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource/asmsecret"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource/credentialspec"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource/firelens"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource/ssmsecret"
 	resourcestatus "github.com/aws/amazon-ecs-agent/agent/taskresource/status"
@@ -359,6 +360,11 @@ func (task *Task) PostUnmarshalTask(cfg *config.Config,
 			return err
 		}
 	}
+
+	if task.requiresCredentialSpecResource() {
+		task.initializeCredentialSpecResource(cfg, credentialsManager, resourceFields)
+	}
+
 	return nil
 }
 
@@ -694,6 +700,34 @@ func (task *Task) requiresSSMSecret() bool {
 	return false
 }
 
+// requiresCredentialSpecResource returns true if at least one container in the task
+// needs a valid credentialspec resource
+func (task *Task) requiresCredentialSpecResource() bool {
+	for _, container := range task.Containers {
+		if container.RequiresCredentialSpec() {
+			return true
+		}
+	}
+	return false
+}
+
+// initializeCredentialSpecResource builds the resource dependency map for the credentialspec resource
+func (task *Task) initializeCredentialSpecResource(config *config.Config, credentialsManager credentials.Manager,
+	resourceFields *taskresource.ResourceFields) {
+	credentialspecResource := credentialspec.NewCredentialSpecResource(task.Arn, config.AWSRegion, task.getAllCredentialSpecRequirements(),
+		task.ExecutionCredentialsID, credentialsManager, resourceFields.SSMClientCreator, resourceFields.S3ClientCreator)
+	task.AddResource(credentialspec.ResourceName, credentialspecResource)
+
+	// for every container that needs credential spec vending, it needs to wait for all credential spec resources
+	for _, container := range task.Containers {
+		if container.RequiresCredentialSpec() {
+			container.BuildResourceDependency(credentialspecResource.GetName(),
+				resourcestatus.ResourceStatus(credentialspec.CredentialSpecCreated),
+				apicontainerstatus.ContainerCreated)
+		}
+	}
+}
+
 // initializeSSMSecretResource builds the resource dependency map for the SSM ssmsecret resource
 func (task *Task) initializeSSMSecretResource(credentialsManager credentials.Manager,
 	resourceFields *taskresource.ResourceFields) {
@@ -748,6 +782,22 @@ func (task *Task) getAllSSMSecretRequirements() map[string][]apicontainer.Secret
 			}
 		}
 	}
+	return reqs
+}
+
+// getAllCredentialSpecRequirements is used to build all the credential spec requirements for the task
+func (task *Task) getAllCredentialSpecRequirements() map[string][]*apicontainer.Container {
+	reqs := make(map[string][]*apicontainer.Container)
+
+	for _, container := range task.Containers {
+		if container.RequiresCredentialSpec() {
+			credentialSpec, err := container.GetCredentialSpec()
+			if err != nil && credentialSpec != "" {
+				reqs[credentialSpec] = append(reqs[credentialSpec], container)
+			}
+		}
+	}
+
 	return reqs
 }
 
@@ -2222,6 +2272,15 @@ func (task *Task) getSSMSecretsResource() ([]taskresource.TaskResource, bool) {
 	defer task.lock.RUnlock()
 
 	res, ok := task.ResourcesMapUnsafe[ssmsecret.ResourceName]
+	return res, ok
+}
+
+// GetCredentialSpecResource retrieves credentialspec resource from resource map
+func (task *Task) GetCredentialSpecResource() ([]taskresource.TaskResource, bool) {
+	task.lock.RLock()
+	defer task.lock.RUnlock()
+
+	res, ok := task.ResourcesMapUnsafe[credentialspec.ResourceName]
 	return res, ok
 }
 
