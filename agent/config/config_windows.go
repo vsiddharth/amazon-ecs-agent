@@ -104,6 +104,8 @@ func DefaultConfig() Config {
 		PollMetrics:                         false,
 		PollingMetricsWaitDuration:          DefaultPollingMetricsWaitDuration,
 		GMSACapable:                         true,
+		PauseContainerImageName:             "602401143452.dkr.ecr.us-west-2.amazonaws.com/eks/pause-windows",
+		PauseContainerTag:					 "1809",
 	}
 }
 

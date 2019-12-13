@@ -25,7 +25,6 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/logger"
 	"github.com/cihub/seelog"
 	"github.com/containernetworking/cni/libcni"
-	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/pkg/errors"
 )
@@ -101,52 +100,52 @@ func (client *cniClient) SetupNS(
 func (client *cniClient) setupNS(ctx context.Context, cfg *Config) (*current.Result, error) {
 	seelog.Debugf("[ECSCNI] Setting up the container namespace %s", cfg.ContainerID)
 
-	var bridgeResult cnitypes.Result
-	runtimeConfig := libcni.RuntimeConf{
-		ContainerID: cfg.ContainerID,
-		NetNS:       fmt.Sprintf(netnsFormat, cfg.ContainerPID),
-	}
+	//var bridgeResult cnitypes.Result
+	//runtimeConfig := libcni.RuntimeConf{
+	//	ContainerID: cfg.ContainerID,
+	//	NetNS:       fmt.Sprintf(netnsFormat, cfg.ContainerPID),
+	//}
+	//
+	//// Execute all CNI network configurations serially, in the given order.
+	//for _, networkConfig := range cfg.NetworkConfigs {
+	//	cniNetworkConfig := networkConfig.CNINetworkConfig
+	//	seelog.Debugf("[ECSCNI] Adding network %s type %s in the container namespace %s",
+	//		cniNetworkConfig.Network.Name,
+	//		cniNetworkConfig.Network.Type,
+	//		cfg.ContainerID)
+	//	runtimeConfig.IfName = networkConfig.IfName
+	//	result, err := client.libcni.AddNetwork(ctx, cniNetworkConfig, &runtimeConfig)
+	//	if err != nil {
+	//		return nil, errors.Wrap(err, "add network failed")
+	//	}
+	//	// Save the result object from the bridge plugin execution. We need this later
+	//	// for inferring what IPv4 address was used to bring up the veth pair for task.
+	//	if cniNetworkConfig.Network.Type == ECSBridgePluginName {
+	//		bridgeResult = result
+	//	}
+	//
+	//	seelog.Debugf("[ECSCNI] Completed adding network %s type %s in the container namespace %s",
+	//		cniNetworkConfig.Network.Name,
+	//		cniNetworkConfig.Network.Type,
+	//		cfg.ContainerID)
+	//}
+	//
+	//seelog.Debugf("[ECSCNI] Completed setting up the container namespace: %s", bridgeResult.String())
+	//
+	//if _, err := bridgeResult.GetAsVersion(currentCNISpec); err != nil {
+	//	seelog.Warnf("[ECSCNI] Unable to convert result to spec version %s; error: %v; result is of version: %s",
+	//		currentCNISpec, err, bridgeResult.Version())
+	//	return nil, err
+	//}
+	//var curResult *current.Result
+	//curResult, ok := bridgeResult.(*current.Result)
+	//if !ok {
+	//	return nil, errors.Errorf(
+	//		"cni setup: unable to convert result to expected version '%s'",
+	//		bridgeResult.String())
+	//}
 
-	// Execute all CNI network configurations serially, in the given order.
-	for _, networkConfig := range cfg.NetworkConfigs {
-		cniNetworkConfig := networkConfig.CNINetworkConfig
-		seelog.Debugf("[ECSCNI] Adding network %s type %s in the container namespace %s",
-			cniNetworkConfig.Network.Name,
-			cniNetworkConfig.Network.Type,
-			cfg.ContainerID)
-		runtimeConfig.IfName = networkConfig.IfName
-		result, err := client.libcni.AddNetwork(ctx, cniNetworkConfig, &runtimeConfig)
-		if err != nil {
-			return nil, errors.Wrap(err, "add network failed")
-		}
-		// Save the result object from the bridge plugin execution. We need this later
-		// for inferring what IPv4 address was used to bring up the veth pair for task.
-		if cniNetworkConfig.Network.Type == ECSBridgePluginName {
-			bridgeResult = result
-		}
-
-		seelog.Debugf("[ECSCNI] Completed adding network %s type %s in the container namespace %s",
-			cniNetworkConfig.Network.Name,
-			cniNetworkConfig.Network.Type,
-			cfg.ContainerID)
-	}
-
-	seelog.Debugf("[ECSCNI] Completed setting up the container namespace: %s", bridgeResult.String())
-
-	if _, err := bridgeResult.GetAsVersion(currentCNISpec); err != nil {
-		seelog.Warnf("[ECSCNI] Unable to convert result to spec version %s; error: %v; result is of version: %s",
-			currentCNISpec, err, bridgeResult.Version())
-		return nil, err
-	}
-	var curResult *current.Result
-	curResult, ok := bridgeResult.(*current.Result)
-	if !ok {
-		return nil, errors.Errorf(
-			"cni setup: unable to convert result to expected version '%s'",
-			bridgeResult.String())
-	}
-
-	return curResult, nil
+	return nil, nil
 }
 
 // CleanupNS will clean up the container namespace, including remove the veth
