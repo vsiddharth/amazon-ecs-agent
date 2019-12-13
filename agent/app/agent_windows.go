@@ -17,8 +17,9 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"github.com/aws/amazon-ecs-agent/agent/eni/udevwrapper"
+	"github.com/aws/amazon-ecs-agent/agent/eni/watcher"
 	"sync"
 	"time"
 
@@ -37,6 +38,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/cihub/seelog"
 	"golang.org/x/sys/windows/svc"
+	"github.com/pkg/errors"
+
 )
 
 const (
@@ -212,6 +215,23 @@ func (h *handler) runAgent(ctx context.Context) uint32 {
 	return indicator.wait()
 }
 
+// startUdevWatcher starts the udev monitor and the watcher for receiving
+// notifications from the monitor
+func (agent *ecsAgent) startUdevWatcher(state dockerstate.TaskEngineState, stateChangeEvents chan<- statechange.Event) error {
+	seelog.Debug("Setting up ENI Watcher")
+	udevMonitor, err := udevwrapper.New()
+	if err != nil {
+		return errors.Wrapf(err, "unable to create udev monitor")
+	}
+	// Create Watcher
+	eniWatcher := watcher.New(agent.ctx, agent.mac, udevMonitor, state, stateChangeEvents)
+	if err := eniWatcher.Init(); err != nil {
+		return errors.Wrapf(err, "unable to initialize eni watcher")
+	}
+	go eniWatcher.Start()
+	return nil
+}
+
 // sleepCtx provides a cancelable sleep
 func sleepCtx(ctx context.Context, duration time.Duration) {
 	derivedCtx, _ := context.WithDeadline(ctx, time.Now().Add(duration))
@@ -328,10 +348,4 @@ func (agent *ecsAgent) setVPCSubnet() (error, bool) {
 	agent.subnet = subnetID
 	agent.mac = mac
 	return nil, false
-}
-
-func (agent *ecsAgent) startUdevWatcher(state dockerstate.TaskEngineState, stateChangeEvents chan<- statechange.Event) error {
-	// TODO: Implement changes
-
-	return nil
 }
