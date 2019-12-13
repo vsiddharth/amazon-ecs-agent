@@ -70,6 +70,7 @@ func (agent *ecsAgent) appendGMSACapabilities(capabilities []*ecs.Attribute) []*
 	if agent.cfg.GMSACapable {
 		return appendNameOnlyAttribute(capabilities, attributePrefix+capabilityGMSA)
 	}
+	return capabilities
 }
 
 func (agent *ecsAgent) appendBranchENIPluginVersionAttribute(capabilities []*ecs.Attribute) []*ecs.Attribute {

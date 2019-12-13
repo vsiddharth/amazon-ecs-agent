@@ -19,13 +19,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
 	asmfactory "github.com/aws/amazon-ecs-agent/agent/asm/factory"
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
-	"github.com/aws/amazon-ecs-agent/agent/ec2"
 	"github.com/aws/amazon-ecs-agent/agent/ecs_client/model/ecs"
 	"github.com/aws/amazon-ecs-agent/agent/engine"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
@@ -33,8 +31,10 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/sighandlers"
 	"github.com/aws/amazon-ecs-agent/agent/sighandlers/exitcodes"
 	ssmfactory "github.com/aws/amazon-ecs-agent/agent/ssm/factory"
+	"github.com/aws/amazon-ecs-agent/agent/statechange"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/cihub/seelog"
 	"golang.org/x/sys/windows/svc"
 )
@@ -299,11 +299,10 @@ func (agent *ecsAgent) loadPauseContainer() error {
 }
 
 func isInstanceLaunchedInVPC(err error) bool {
-	if metadataErr, ok := err.(*ec2.MetadataError); ok &&
-		metadataErr.GetStatusCode() == http.StatusNotFound {
+	if aerr, ok := err.(awserr.Error); ok &&
+		aerr.Code() == "EC2MetadataError" {
 		return false
 	}
-
 	return true
 }
 
@@ -329,4 +328,10 @@ func (agent *ecsAgent) setVPCSubnet() (error, bool) {
 	agent.subnet = subnetID
 	agent.mac = mac
 	return nil, false
+}
+
+func (agent *ecsAgent) startUdevWatcher(state dockerstate.TaskEngineState, stateChangeEvents chan<- statechange.Event) error {
+	// TODO: Implement changes
+
+	return nil
 }
