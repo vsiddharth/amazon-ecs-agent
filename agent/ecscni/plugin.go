@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -100,6 +101,7 @@ func (client *cniClient) SetupNS(
 func (client *cniClient) setupNS(ctx context.Context, cfg *Config) (*current.Result, error) {
 	seelog.Debugf("[ECSCNI] Setting up the container namespace %s", cfg.ContainerID)
 
+
 	//var bridgeResult cnitypes.Result
 	//runtimeConfig := libcni.RuntimeConf{
 	//	ContainerID: cfg.ContainerID,
@@ -137,15 +139,22 @@ func (client *cniClient) setupNS(ctx context.Context, cfg *Config) (*current.Res
 	//		currentCNISpec, err, bridgeResult.Version())
 	//	return nil, err
 	//}
-	//var curResult *current.Result
-	//curResult, ok := bridgeResult.(*current.Result)
+
+	_, ip, _ := net.ParseCIDR("169.254.170.3/32")
+	curResult := &current.Result{
+		IPs: []*current.IPConfig{
+			{
+				Address: *ip,
+			},
+		},
+	}
 	//if !ok {
 	//	return nil, errors.Errorf(
 	//		"cni setup: unable to convert result to expected version '%s'",
 	//		bridgeResult.String())
 	//}
 
-	return nil, nil
+	return curResult, nil
 }
 
 // CleanupNS will clean up the container namespace, including remove the veth

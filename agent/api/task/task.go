@@ -1151,61 +1151,61 @@ func (task *Task) IsNetworkModeAWSVPC() bool {
 }
 
 func (task *Task) addNetworkResourceProvisioningDependency(cfg *config.Config) error {
-	if !task.IsNetworkModeAWSVPC() {
-		return nil
-	}
-	pauseContainer := apicontainer.NewContainerWithSteadyState(apicontainerstatus.ContainerResourcesProvisioned)
-	pauseContainer.TransitionDependenciesMap = make(map[apicontainerstatus.ContainerStatus]apicontainer.TransitionDependencySet)
-	pauseContainer.Name = NetworkPauseContainerName
-	pauseContainer.Image = fmt.Sprintf("%s:%s", cfg.PauseContainerImageName, cfg.PauseContainerTag)
-	pauseContainer.Essential = true
-	pauseContainer.Type = apicontainer.ContainerCNIPause
-
-	// Set pauseContainer user the same as proxy container user when image name is not DefaultPauseContainerImageName
-	if task.GetAppMesh() != nil && cfg.PauseContainerImageName != config.DefaultPauseContainerImageName {
-		appMeshConfig := task.GetAppMesh()
-
-		// Validation is done when registering task to make sure there is one container name matching
-		for _, container := range task.Containers {
-			if container.Name != appMeshConfig.ContainerName {
-				continue
-			}
-
-			if container.DockerConfig.Config == nil {
-				return errors.Errorf("user needs to be specified for proxy container")
-			}
-			containerConfig := &dockercontainer.Config{}
-			if err := json.Unmarshal([]byte(aws.StringValue(container.DockerConfig.Config)), &containerConfig); err != nil {
-				return errors.Errorf("unable to decode given docker config: %s", err.Error())
-			}
-
-			if containerConfig.User == "" {
-				return errors.Errorf("user needs to be specified for proxy container")
-			}
-
-			pauseConfig := dockercontainer.Config{
-				User:  containerConfig.User,
-				Image: fmt.Sprintf("%s:%s", cfg.PauseContainerImageName, cfg.PauseContainerTag),
-			}
-
-			bytes, _ := json.Marshal(pauseConfig)
-			serializedConfig := string(bytes)
-			pauseContainer.DockerConfig = apicontainer.DockerConfig{
-				Config: &serializedConfig,
-			}
-			break
-		}
-	}
-
-	task.Containers = append(task.Containers, pauseContainer)
-
-	for _, container := range task.Containers {
-		if container.IsInternal() {
-			continue
-		}
-		container.BuildContainerDependency(NetworkPauseContainerName, apicontainerstatus.ContainerResourcesProvisioned, apicontainerstatus.ContainerPulled)
-		pauseContainer.BuildContainerDependency(container.Name, apicontainerstatus.ContainerStopped, apicontainerstatus.ContainerStopped)
-	}
+	//if !task.IsNetworkModeAWSVPC() {
+	//	return nil
+	//}
+	//pauseContainer := apicontainer.NewContainerWithSteadyState(apicontainerstatus.ContainerResourcesProvisioned)
+	//pauseContainer.TransitionDependenciesMap = make(map[apicontainerstatus.ContainerStatus]apicontainer.TransitionDependencySet)
+	//pauseContainer.Name = NetworkPauseContainerName
+	//pauseContainer.Image = fmt.Sprintf("%s:%s", cfg.PauseContainerImageName, cfg.PauseContainerTag)
+	//pauseContainer.Essential = true
+	//pauseContainer.Type = apicontainer.ContainerCNIPause
+	//
+	//// Set pauseContainer user the same as proxy container user when image name is not DefaultPauseContainerImageName
+	//if task.GetAppMesh() != nil && cfg.PauseContainerImageName != config.DefaultPauseContainerImageName {
+	//	appMeshConfig := task.GetAppMesh()
+	//
+	//	// Validation is done when registering task to make sure there is one container name matching
+	//	for _, container := range task.Containers {
+	//		if container.Name != appMeshConfig.ContainerName {
+	//			continue
+	//		}
+	//
+	//		if container.DockerConfig.Config == nil {
+	//			return errors.Errorf("user needs to be specified for proxy container")
+	//		}
+	//		containerConfig := &dockercontainer.Config{}
+	//		if err := json.Unmarshal([]byte(aws.StringValue(container.DockerConfig.Config)), &containerConfig); err != nil {
+	//			return errors.Errorf("unable to decode given docker config: %s", err.Error())
+	//		}
+	//
+	//		if containerConfig.User == "" {
+	//			return errors.Errorf("user needs to be specified for proxy container")
+	//		}
+	//
+	//		pauseConfig := dockercontainer.Config{
+	//			User:  containerConfig.User,
+	//			Image: fmt.Sprintf("%s:%s", cfg.PauseContainerImageName, cfg.PauseContainerTag),
+	//		}
+	//
+	//		bytes, _ := json.Marshal(pauseConfig)
+	//		serializedConfig := string(bytes)
+	//		pauseContainer.DockerConfig = apicontainer.DockerConfig{
+	//			Config: &serializedConfig,
+	//		}
+	//		break
+	//	}
+	//}
+	//
+	//task.Containers = append(task.Containers, pauseContainer)
+	//
+	//for _, container := range task.Containers {
+	//	if container.IsInternal() {
+	//		continue
+	//	}
+	//	container.BuildContainerDependency(NetworkPauseContainerName, apicontainerstatus.ContainerResourcesProvisioned, apicontainerstatus.ContainerPulled)
+	//	pauseContainer.BuildContainerDependency(container.Name, apicontainerstatus.ContainerStopped, apicontainerstatus.ContainerStopped)
+	//}
 	return nil
 }
 
